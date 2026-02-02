@@ -1,0 +1,121 @@
+/* Time Slot Manager Styles */
+
+.info-box {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+}
+
+.info-box p {
+    margin: 0;
+    color: #1e40af;
+    font-size: 14px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #374151;
+    font-size: 14px;
+}
+
+.form-input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+}
+
+.days-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+}
+
+.day-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
+}
+
+.day-checkbox:hover {
+    border-color: #3b82f6;
+    background: #f9fafb;
+}
+
+.day-checkbox input[type="checkbox"] {
+    cursor: pointer;
+}
+
+.day-checkbox input[type="checkbox"]:checked+span {
+    font-weight: 600;
+    color: #3b82f6;
+}
+
+.schedule-preview {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 16px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.lesson-time {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.lesson-time:last-child {
+    border-bottom: none;
+}
+
+.lesson-number {
+    font-weight: 600;
+    color: #374151;
+}
+
+.lesson-time-range {
+    color: #6b7280;
+    font-size: 14px;
+}
+
+.summary-box {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-top: 20px;
+    color: #166534;
+    font-size: 14px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .days-grid {
+        grid-template-columns: 1fr;
+    }
+}

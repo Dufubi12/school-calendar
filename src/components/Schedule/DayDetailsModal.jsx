@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { X, Plus, UserX, Trash2 } from 'lucide-react';
+import { X, Plus, UserX, Trash2, Users } from 'lucide-react';
 import { format } from 'date-fns';
 
-const DayDetailsModal = ({ date, isOpen, onClose, lessons = [], onAddLesson, onAddSubstitution, onRemoveLesson }) => {
+const DayDetailsModal = ({ date, isOpen, onClose, lessons = [], onAddLesson, onAddSubstitution, onAddClub, onRemoveLesson }) => {
     if (!isOpen) return null;
 
     const dayLessons = lessons.filter(l => l.date === format(date, 'yyyy-MM-dd'));
@@ -39,7 +39,7 @@ const DayDetailsModal = ({ date, isOpen, onClose, lessons = [], onAddLesson, onA
                                     padding: '0.75rem',
                                     border: '1px solid var(--color-border)',
                                     borderRadius: 'var(--radius)',
-                                    backgroundColor: lesson.type === 'substitution' ? '#fee2e2' : 'white',
+                                    backgroundColor: lesson.type === 'substitution' ? '#fee2e2' : lesson.type === 'club' ? '#faf5ff' : 'white',
                                     display: 'flex', flexDirection: 'column', gap: '0.5rem'
                                 }}>
                                     <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 100px', gap: '1rem', alignItems: 'center' }}>
@@ -58,9 +58,13 @@ const DayDetailsModal = ({ date, isOpen, onClose, lessons = [], onAddLesson, onA
 
                                         {/* Column 2: Subject & Teacher */}
                                         <div>
-                                            <div style={{ fontWeight: 'bold' }}>{lesson.subject}</div>
+                                            <div style={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                {lesson.type === 'club' && <span>🎯</span>}
+                                                {lesson.subject}
+                                            </div>
                                             <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
-                                                {lesson.type === 'substitution' ? 'Замена: ' : ''}
+                                                {lesson.type === 'substitution' && 'Замена: '}
+                                                {lesson.type === 'club' && 'Кружок: '}
                                                 {lesson.details.split('•')[0]} {/* Extract teacher name */}
                                             </div>
                                         </div>
@@ -117,10 +121,25 @@ const DayDetailsModal = ({ date, isOpen, onClose, lessons = [], onAddLesson, onA
                     )}
                 </div>
 
-                <div style={{ display: 'flex', gap: '1rem', borderTop: '1px solid var(--color-border)', paddingTop: '1rem' }}>
+                <div style={{ display: 'flex', gap: '0.75rem', borderTop: '1px solid var(--color-border)', paddingTop: '1rem', flexWrap: 'wrap' }}>
                     <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => { onClose(); onAddLesson(); }}>
                         <Plus size={18} />
                         Добавить урок
+                    </button>
+                    <button
+                        className="btn"
+                        style={{
+                            flex: 1,
+                            backgroundColor: '#8b5cf6',
+                            color: 'white',
+                            borderColor: '#8b5cf6'
+                        }}
+                        onClick={() => { onClose(); onAddClub && onAddClub(); }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#7c3aed'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#8b5cf6'}
+                    >
+                        <Users size={18} />
+                        Добавить кружок
                     </button>
                     <button
                         className="btn btn-secondary"

@@ -8,6 +8,9 @@ import LessonModal from '../components/Schedule/LessonModal';
 import TimeSlotGrid from '../components/Schedule/TimeSlotGrid';
 import TeacherAssignmentModal from '../components/Schedule/TeacherAssignmentModal';
 import TimeSlotManager from '../components/Schedule/TimeSlotManager';
+import TeacherAvailabilityPanel from '../components/Teachers/TeacherAvailabilityPanel';
+import BellScheduleEditor from '../components/Schedule/BellScheduleEditor';
+import ClubModal from '../components/Schedule/ClubModal';
 import { useSchedule } from '../context/ScheduleContext';
 
 const CalendarPage = () => {
@@ -23,9 +26,12 @@ const CalendarPage = () => {
     const [isTeacherAssignmentOpen, setIsTeacherAssignmentOpen] = useState(false);
     const [selectedSlot, setSelectedSlot] = useState(null);
     const [isTimeSlotManagerOpen, setIsTimeSlotManagerOpen] = useState(false);
+    const [isAvailabilityPanelOpen, setIsAvailabilityPanelOpen] = useState(false);
+    const [isBellScheduleEditorOpen, setIsBellScheduleEditorOpen] = useState(false);
+    const [isClubModalOpen, setIsClubModalOpen] = useState(false);
 
     // Data State
-    const { events, addEvent, removeEvent, assignTeacherToSlot } = useSchedule();
+    const { events, addEvent, removeEvent, assignTeacherToSlot, bellSchedule, updateBellSchedule } = useSchedule();
 
     const handleNextMonth = () => {
         setCurrentDate(nextMonth(currentDate));
@@ -84,11 +90,23 @@ const CalendarPage = () => {
                 >
                     ⏰ Расписание по слотам
                 </button>
+                <button
+                    className="btn btn-secondary"
+                    onClick={() => setIsBellScheduleEditorOpen(true)}
+                    style={{ marginLeft: 'auto' }}
+                >
+                    🔔 Расписание звонков
+                </button>
+                <button
+                    className="btn btn-secondary"
+                    onClick={() => setIsAvailabilityPanelOpen(true)}
+                >
+                    👥 Кто свободен?
+                </button>
                 {viewMode === 'schedule' && (
                     <button
                         className="btn btn-primary"
                         onClick={() => setIsTimeSlotManagerOpen(true)}
-                        style={{ marginLeft: 'auto' }}
                     >
                         ➕ Создать расписание
                     </button>
@@ -116,6 +134,7 @@ const CalendarPage = () => {
                 lessons={events}
                 onAddLesson={() => setIsLessonModalOpen(true)}
                 onAddSubstitution={openSubstitutionModal}
+                onAddClub={() => setIsClubModalOpen(true)}
                 onRemoveLesson={removeEvent}
             />
 
@@ -148,6 +167,33 @@ const CalendarPage = () => {
             <TimeSlotManager
                 isOpen={isTimeSlotManagerOpen}
                 onClose={() => setIsTimeSlotManagerOpen(false)}
+            />
+
+            {/* 6. Teacher Availability Panel */}
+            <TeacherAvailabilityPanel
+                date={selectedDate}
+                isOpen={isAvailabilityPanelOpen}
+                onClose={() => setIsAvailabilityPanelOpen(false)}
+                onSelectTeacher={(teacher) => {
+                    console.log('Selected teacher:', teacher);
+                    setIsAvailabilityPanelOpen(false);
+                }}
+            />
+
+            {/* 7. Bell Schedule Editor */}
+            <BellScheduleEditor
+                isOpen={isBellScheduleEditorOpen}
+                onClose={() => setIsBellScheduleEditorOpen(false)}
+                currentSchedule={bellSchedule}
+                onSave={updateBellSchedule}
+            />
+
+            {/* 8. Club Modal */}
+            <ClubModal
+                date={selectedDate}
+                isOpen={isClubModalOpen}
+                onClose={() => setIsClubModalOpen(false)}
+                onSave={handleAddEvent}
             />
         </div>
     );

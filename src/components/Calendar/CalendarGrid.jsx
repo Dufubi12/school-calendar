@@ -84,24 +84,80 @@ const CalendarGrid = ({ currentDate, onDayClick, substitutions = [] }) => {
                             </span>
                         </div>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', overflow: 'hidden' }}>
-                            {dayEvents.slice(0, 3).map(event => (
-                                <div key={event.id} style={{
-                                    fontSize: '0.7rem',
-                                    backgroundColor: event.type === 'substitution' ? '#fee2e2' : '#dbeafe',
-                                    color: event.type === 'substitution' ? '#991b1b' : '#1e40af',
-                                    padding: '2px 4px',
-                                    borderRadius: '4px',
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis'
-                                }}>
-                                    {event.type === 'substitution' ? 'З:' : ''} {event.details || event.subject}
-                                </div>
-                            ))}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', overflow: 'hidden', flex: 1 }}>
+                            {dayEvents.slice(0, 3).map(event => {
+                                // Определяем стиль в зависимости от типа события
+                                const isSubstitution = event.type === 'substitution';
+                                const isLesson = event.type === 'lesson';
+                                const isClub = event.type === 'club';
+
+                                let bgColor = '#dbeafe';
+                                let textColor = '#1e40af';
+                                let borderColor = '#93c5fd';
+                                let icon = '📖';
+
+                                if (isSubstitution) {
+                                    bgColor = '#fef2f2';
+                                    textColor = '#991b1b';
+                                    borderColor = '#fecaca';
+                                    icon = '🔄';
+                                } else if (isLesson) {
+                                    bgColor = '#f0fdf4';
+                                    textColor = '#15803d';
+                                    borderColor = '#bbf7d0';
+                                    icon = '✓';
+                                } else if (isClub) {
+                                    bgColor = '#faf5ff';
+                                    textColor = '#6b21a8';
+                                    borderColor = '#e9d5ff';
+                                    icon = '🎯';
+                                }
+
+                                return (
+                                    <div key={event.id} style={{
+                                        fontSize: '0.7rem',
+                                        backgroundColor: bgColor,
+                                        color: textColor,
+                                        padding: '3px 6px',
+                                        borderRadius: '4px',
+                                        borderLeft: `3px solid ${borderColor}`,
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                        transition: 'transform 0.1s'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.transform = 'scale(1.02)';
+                                        e.currentTarget.style.zIndex = '10';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.transform = 'scale(1)';
+                                        e.currentTarget.style.zIndex = '1';
+                                    }}
+                                    title={`${event.subject || ''}\n${event.startTime ? `${event.startTime} - ${event.endTime}` : ''}\n${event.details || ''}`}
+                                    >
+                                        <span style={{ fontSize: '0.65rem' }}>{icon}</span>
+                                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                            {event.startTime && <span style={{ fontWeight: 'bold', marginRight: '4px' }}>{event.startTime}</span>}
+                                            {event.subject || event.details}
+                                        </span>
+                                    </div>
+                                );
+                            })}
                             {dayEvents.length > 3 && (
-                                <div style={{ fontSize: '0.7rem', color: '#64748b', textAlign: 'center' }}>
-                                    еще {dayEvents.length - 3}...
+                                <div style={{
+                                    fontSize: '0.7rem',
+                                    color: '#64748b',
+                                    textAlign: 'center',
+                                    padding: '2px',
+                                    backgroundColor: '#f1f5f9',
+                                    borderRadius: '3px',
+                                    fontWeight: '500'
+                                }}>
+                                    +{dayEvents.length - 3} еще
                                 </div>
                             )}
                         </div>

@@ -1,13 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { SUBJECTS, GRADES, AVAILABILITY_PRESETS } from '../../data/mockData';
 import { useSchedule } from '../../context/ScheduleContext'; // Access live data
-import { X, UserX, UserCheck, Calendar, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { X, UserX, UserCheck, Calendar, AlertCircle, CheckCircle2, Info } from 'lucide-react';
 import { format } from 'date-fns';
+import { getAvailableTeachers } from '../../utils/scheduleUtils';
 
 const SubstitutionModal = ({ date, isOpen, onClose, onSave, initialData }) => {
     if (!isOpen) return null;
 
-    const { events, teachers } = useSchedule();
+    const { events, teachers, timeSlots } = useSchedule();
 
     // Form State
     const [absentTeacherId, setAbsentTeacherId] = useState('');
@@ -50,56 +51,56 @@ const SubstitutionModal = ({ date, isOpen, onClose, onSave, initialData }) => {
         }
     };
 
-    // 2. Filter & Analyze Candidates
+    // 2. Filter & Analyze Candidates using improved utility
     const candidates = useMemo(() => {
         if (!absentTeacherId) return [];
 
         const dateKey = format(date, 'yyyy-MM-dd');
 
-        return teachers.filter(teacher => {
-            // Exclude the absent teacher
-            if (teacher.id === parseInt(absentTeacherId)) return false;
+        // Create time slot object for checking
+        const timeSlot = {
+            date: dateKey,
+            startTime: startTime || AVAILABILITY_PRESETS[selectedLesson - 1]?.start || '08:30',
+            endTime: endTime || AVAILABILITY_PRESETS[selectedLesson - 1]?.end || '09:15',
+            lessonNumber: parseInt(selectedLesson)
+        };
 
-            // Filter by Qualification (Subject & Grade)
-            const subjectMatch = selectedSubject ? teacher.subject === selectedSubject : true;
+        // Get available teachers using utility function
+        const availableTeachers = getAvailableTeachers(
+            timeSlot,
+            teachers.filter(t => t.id !== parseInt(absentTeacherId)), // Exclude absent teacher
+            timeSlots,
+            selectedSubject || null
+        );
 
-            // Allow seeing all teachers of the subject, even if grade doesn't match perfectly? 
-            // User requested "Show all who teach Russian". So we mainly filter by Subject.
-            // Let's keep Grade filter as well but maybe make it optional in future. For now strict.
-            const gradeMatch = selectedGrade ? teacher.grades.includes(selectedGrade) : true;
+        // Filter by grade if selected
+        const filteredTeachers = selectedGrade
+            ? availableTeachers.filter(t => t.grades && t.grades.includes(selectedGrade))
+            : availableTeachers;
 
-            return subjectMatch && gradeMatch;
-        }).map(teacher => {
-            // Analyze Status for EACH candidate
+        // Transform to match current component structure
+        const mapped = filteredTeachers.map(teacher => {
             const dayEvents = events.filter(e => e.teacherId === teacher.id && e.date === dateKey);
-
-            // Check exact collision OR Time Overlap
-            // const collision = dayEvents.find(e => e.lessonNumber === parseInt(selectedLesson)); // Old logic
-
-            let collision = null;
-
-            if (startTime && endTime) {
-                // Time-based overlap check
-                collision = dayEvents.find(e => {
-                    if (!e.startTime || !e.endTime) return e.lessonNumber === parseInt(selectedLesson); // Fallback
-
-                    // Overlap: (StartA < EndB) && (EndA > StartB)
-                    return (e.startTime < endTime) && (e.endTime > startTime);
-                });
-            } else {
-                // Fallback to lesson number if no time set
-                collision = dayEvents.find(e => e.lessonNumber === parseInt(selectedLesson));
-            }
 
             return {
                 ...teacher,
                 workload: dayEvents.length,
                 workloadDetails: dayEvents.map(e => e.lessonNumber).sort((a, b) => a - b).join(', '),
-                isBusy: !!collision,
-                busyReason: collision ? `${collision.subject} (${collision.startTime}-${collision.endTime})` : null
+                isBusy: teacher.hasConflict,
+                busyReason: teacher.conflicts && teacher.conflicts.length > 0
+                    ? `${teacher.conflicts[0].subject || 'Урок'} (${teacher.conflicts[0].startTime}-${teacher.conflicts[0].endTime})`
+                    : null
             };
         });
-    }, [absentTeacherId, selectedSubject, selectedGrade, selectedLesson, startTime, endTime, date, events]);
+
+        // Sort: Free teachers first, then by workload
+        return mapped.sort((a, b) => {
+            if (a.isBusy === b.isBusy) {
+                return a.workload - b.workload;
+            }
+            return a.isBusy ? 1 : -1;
+        });
+    }, [absentTeacherId, selectedSubject, selectedGrade, selectedLesson, startTime, endTime, date, events, teachers, timeSlots]);
 
     const handleSave = () => {
         if (onSave && date && absentTeacherId && selectedSubstituteId) {
@@ -203,17 +204,40 @@ const SubstitutionModal = ({ date, isOpen, onClose, onSave, initialData }) => {
                 {/* Step 2: Candidates List */}
                 {absentTeacherId && (
                     <div style={{ marginBottom: '2rem' }}>
-                        <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <h3 style={{ fontSize: '1rem', marginBottom: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span>Кандидаты на замену ({candidates.length})</span>
                             <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', fontWeight: 'normal' }}>
-                                Показаны учителя предмета "{selectedSubject}"
+                                {selectedSubject ? `Предмет: "${selectedSubject}"` : 'Все предметы'}
                             </span>
                         </h3>
 
-                        <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 'var(--radius)' }}>
+                        {/* Info hint */}
+                        {candidates.filter(t => !t.isBusy).length > 0 && (
+                            <div style={{
+                                padding: '0.75rem',
+                                backgroundColor: '#f0fdf4',
+                                border: '1px solid #bbf7d0',
+                                borderRadius: '6px',
+                                marginBottom: '0.75rem',
+                                fontSize: '0.875rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.5rem',
+                                color: '#15803d'
+                            }}>
+                                <Info size={16} />
+                                <span>
+                                    🟢 Свободно: {candidates.filter(t => !t.isBusy).length} учителей
+                                    {candidates.filter(t => t.isBusy).length > 0 && ` | 🔴 Заняты: ${candidates.filter(t => t.isBusy).length}`}
+                                </span>
+                            </div>
+                        )}
+
+                        <div style={{ maxHeight: '350px', overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 'var(--radius)' }}>
                             {candidates.length === 0 ? (
                                 <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-text-muted)' }}>
-                                    Нет учителей с таким предметом и классами.
+                                    <UserX size={48} style={{ margin: '0 auto 1rem', opacity: 0.3 }} />
+                                    <p>Нет учителей с таким предметом и классами.</p>
                                 </div>
                             ) : (
                                 candidates.map(t => {
@@ -221,47 +245,140 @@ const SubstitutionModal = ({ date, isOpen, onClose, onSave, initialData }) => {
                                     if (t.workload >= 3 && t.workload <= 4) loadColor = '#eab308';
                                     if (t.workload >= 5) loadColor = '#ef4444';
 
+                                    const isSelected = selectedSubstituteId === t.id;
+
                                     return (
                                         <div
                                             key={t.id}
                                             onClick={() => setSelectedSubstituteId(t.id)}
                                             style={{
-                                                padding: '0.75rem',
+                                                padding: '1rem',
                                                 borderBottom: '1px solid var(--color-border)',
                                                 cursor: 'pointer',
-                                                backgroundColor: selectedSubstituteId === t.id ? '#eff6ff' : (t.isBusy ? '#fff1f2' : 'white'),
+                                                backgroundColor: isSelected ? '#dbeafe' : (t.isBusy ? '#fef2f2' : '#f0fdf4'),
+                                                borderLeft: isSelected ? '4px solid #3b82f6' : (t.isBusy ? '4px solid #ef4444' : '4px solid #10b981'),
                                                 display: 'flex',
                                                 justifyContent: 'space-between',
                                                 alignItems: 'center',
-                                                opacity: t.isBusy ? 0.9 : 1
+                                                transition: 'all 0.2s',
+                                                position: 'relative'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                if (!isSelected) {
+                                                    e.currentTarget.style.backgroundColor = t.isBusy ? '#fee2e2' : '#dcfce7';
+                                                }
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                if (!isSelected) {
+                                                    e.currentTarget.style.backgroundColor = t.isBusy ? '#fef2f2' : '#f0fdf4';
+                                                }
                                             }}
                                         >
+                                            {/* Status Icon */}
+                                            <div style={{
+                                                width: '48px',
+                                                height: '48px',
+                                                borderRadius: '50%',
+                                                backgroundColor: t.isBusy ? '#fee2e2' : '#dcfce7',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                marginRight: '1rem',
+                                                flexShrink: 0,
+                                                border: `2px solid ${t.isBusy ? '#fecaca' : '#bbf7d0'}`
+                                            }}>
+                                                {t.isBusy ? (
+                                                    <UserX size={24} color="#ef4444" />
+                                                ) : (
+                                                    <UserCheck size={24} color="#10b981" />
+                                                )}
+                                            </div>
+
                                             <div style={{ flex: 1 }}>
-                                                <div style={{ fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.5rem', color: t.isBusy ? '#881337' : 'inherit' }}>
+                                                <div style={{
+                                                    fontWeight: '600',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.5rem',
+                                                    marginBottom: '0.25rem'
+                                                }}>
                                                     {t.name}
-                                                    {t.isBusy && (
-                                                        <span style={{ fontSize: '0.75rem', color: '#dc2626', display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: '#fee2e2', padding: '2px 6px', borderRadius: '4px' }}>
-                                                            <AlertCircle size={12} /> ЗАНЯТ: {t.busyReason}
-                                                        </span>
+                                                    {t.isBusy ? (
+                                                        <span style={{ fontSize: '1rem' }}>🔴</span>
+                                                    ) : (
+                                                        <span style={{ fontSize: '1rem' }}>🟢</span>
                                                     )}
                                                 </div>
-                                                <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginTop: '2px' }}>
+
+                                                {t.isBusy && (
+                                                    <div style={{
+                                                        fontSize: '0.75rem',
+                                                        color: '#dc2626',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        backgroundColor: '#fee2e2',
+                                                        padding: '4px 8px',
+                                                        borderRadius: '4px',
+                                                        marginBottom: '0.5rem',
+                                                        width: 'fit-content'
+                                                    }}>
+                                                        <AlertCircle size={12} />
+                                                        <span>ЗАНЯТ: {t.busyReason}</span>
+                                                    </div>
+                                                )}
+
+                                                <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
                                                     Нагрузка: <span style={{ color: loadColor, fontWeight: 'bold' }}>{t.workload} ур.</span>
-                                                    {t.workload > 0 && ` (${t.workloadDetails})`}
+                                                    {t.workload > 0 && ` (уроки: ${t.workloadDetails})`}
+                                                </div>
+
+                                                {/* Workload bar */}
+                                                <div style={{
+                                                    marginTop: '0.5rem',
+                                                    height: '4px',
+                                                    backgroundColor: '#e5e7eb',
+                                                    borderRadius: '2px',
+                                                    overflow: 'hidden'
+                                                }}>
+                                                    <div style={{
+                                                        width: `${Math.min((t.workload / 8) * 100, 100)}%`,
+                                                        height: '100%',
+                                                        backgroundColor: loadColor,
+                                                        transition: 'width 0.3s'
+                                                    }} />
                                                 </div>
                                             </div>
 
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                                {selectedSubstituteId === t.id ? (
-                                                    <CheckCircle2 size={24} color="var(--color-primary)" />
-                                                ) : (
-                                                    <div style={{ width: '24px' }}></div>
+                                            <div style={{ marginLeft: '1rem' }}>
+                                                {isSelected && (
+                                                    <CheckCircle2 size={28} color="#3b82f6" />
                                                 )}
                                             </div>
                                         </div>
                                     );
                                 })
                             )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Warning if busy teacher selected */}
+                {selectedSubstituteId && candidates.find(t => t.id === selectedSubstituteId)?.isBusy && (
+                    <div style={{
+                        padding: '1rem',
+                        backgroundColor: '#fef2f2',
+                        border: '1px solid #fecaca',
+                        borderRadius: '6px',
+                        marginBottom: '1rem',
+                        display: 'flex',
+                        alignItems: 'start',
+                        gap: '0.75rem'
+                    }}>
+                        <AlertCircle size={20} color="#ef4444" style={{ flexShrink: 0, marginTop: '2px' }} />
+                        <div style={{ fontSize: '0.875rem', color: '#991b1b' }}>
+                            <strong>Внимание!</strong> Выбранный учитель занят в это время.
+                            <br />Это создаст конфликт в расписании. Рекомендуется выбрать свободного учителя.
                         </div>
                     </div>
                 )}
@@ -276,8 +393,15 @@ const SubstitutionModal = ({ date, isOpen, onClose, onSave, initialData }) => {
                         onClick={handleSave}
                         disabled={!absentTeacherId || !selectedSubstituteId}
                         title={!selectedSubstituteId ? "Выберите учителя для замены" : ""}
+                        style={{
+                            backgroundColor: selectedSubstituteId && candidates.find(t => t.id === selectedSubstituteId)?.isBusy
+                                ? '#f59e0b'
+                                : undefined
+                        }}
                     >
-                        Сохранить замену
+                        {selectedSubstituteId && candidates.find(t => t.id === selectedSubstituteId)?.isBusy
+                            ? '⚠️ Сохранить (с конфликтом)'
+                            : 'Сохранить замену'}
                     </button>
                 </div>
 

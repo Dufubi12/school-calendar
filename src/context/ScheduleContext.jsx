@@ -20,6 +20,29 @@ export const useSchedule = () => {
 };
 
 export const ScheduleProvider = ({ children }) => {
+    // 0. Bell Schedule (User customizable)
+    const [bellSchedule, setBellSchedule] = useState(() => {
+        const saved = localStorage.getItem('school_calendar_bell_schedule');
+        if (saved) {
+            try {
+                return JSON.parse(saved);
+            } catch (e) {
+                console.error('Failed to parse bell schedule data', e);
+            }
+        }
+        // Default schedule
+        return [
+            { lessonNumber: 1, startTime: '08:30', endTime: '09:15', label: '1 урок' },
+            { lessonNumber: 2, startTime: '09:25', endTime: '10:10', label: '2 урок' },
+            { lessonNumber: 3, startTime: '10:30', endTime: '11:15', label: '3 урок' },
+            { lessonNumber: 4, startTime: '11:35', endTime: '12:20', label: '4 урок' },
+            { lessonNumber: 5, startTime: '12:30', endTime: '13:15', label: '5 урок' },
+            { lessonNumber: 6, startTime: '13:25', endTime: '14:10', label: '6 урок' },
+            { lessonNumber: 7, startTime: '14:20', endTime: '15:05', label: '7 урок' },
+            { lessonNumber: 8, startTime: '15:15', endTime: '16:00', label: '8 урок' },
+        ];
+    });
+
     // 1. Events (Lessons & Substitutions)
     const [events, setEvents] = useState(() => {
         const saved = localStorage.getItem('school_calendar_events');
@@ -60,6 +83,10 @@ export const ScheduleProvider = ({ children }) => {
     useEffect(() => {
         localStorage.setItem('school_calendar_teachers', JSON.stringify(teachers));
     }, [teachers]);
+
+    useEffect(() => {
+        localStorage.setItem('school_calendar_bell_schedule', JSON.stringify(bellSchedule));
+    }, [bellSchedule]);
 
     const addEvent = (event) => {
         setEvents(prev => [...prev, event]);
@@ -142,12 +169,17 @@ export const ScheduleProvider = ({ children }) => {
         return getSlotsByDate(date, timeSlots);
     };
 
+    const updateBellSchedule = (newSchedule) => {
+        setBellSchedule(newSchedule);
+    };
+
     return (
         <ScheduleContext.Provider value={{
             events, addEvent, removeEvent,
             teachers, addTeacher, removeTeacher, updateTeacher,
             timeSlots, addTimeSlot, removeTimeSlot, updateTimeSlot, assignTeacherToSlot,
-            getTeacherWorkload, checkConflict, getAvailableTeachersForSlot, getSlotsForDate
+            getTeacherWorkload, checkConflict, getAvailableTeachersForSlot, getSlotsForDate,
+            bellSchedule, updateBellSchedule
         }}>
             {children}
         </ScheduleContext.Provider>

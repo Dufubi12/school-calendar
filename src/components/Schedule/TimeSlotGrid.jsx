@@ -1,16 +1,28 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useSchedule } from '../../context/ScheduleContext';
 import { getSlotStatus, getWorkloadLevel } from '../../utils/scheduleUtils';
+import { Edit } from 'lucide-react';
 import './TimeSlot.css';
 
-const TimeSlotGrid = ({ date, onSlotClick }) => {
+const TimeSlotGrid = ({ date, onSlotClick, onEditSlot }) => {
     const { getSlotsForDate, teachers, timeSlots } = useSchedule();
 
     const slots = getSlotsForDate(date);
 
-    // Group slots by lesson number
+    // Вкладки по классам
+    const [selectedGrade, setSelectedGrade] = useState('Все классы');
+
+    // Извлечь уникальные классы из слотов
+    const uniqueGrades = ['Все классы', ...new Set(slots.map(s => s.grade).filter(Boolean))];
+
+    // Фильтровать слоты по выбранному классу
+    const filteredSlots = selectedGrade === 'Все классы'
+        ? slots
+        : slots.filter(s => s.grade === selectedGrade);
+
+    // Group filtered slots by lesson number
     const slotsByLesson = {};
-    slots.forEach(slot => {
+    filteredSlots.forEach(slot => {
         if (!slotsByLesson[slot.lessonNumber]) {
             slotsByLesson[slot.lessonNumber] = [];
         }
@@ -40,9 +52,31 @@ const TimeSlotGrid = ({ date, onSlotClick }) => {
                     <span className="time-slot__time">
                         {slot.startTime} - {slot.endTime}
                     </span>
-                    <span className="time-slot__status-badge" style={{ backgroundColor: status.color }}>
-                        {status.emoji}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span className="time-slot__status-badge" style={{ backgroundColor: status.color }}>
+                            {status.emoji}
+                        </span>
+                        {onEditSlot && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onEditSlot(slot);
+                                }}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    padding: '2px',
+                                    color: '#6b7280',
+                                    display: 'flex',
+                                    alignItems: 'center'
+                                }}
+                                title="Редактировать слот"
+                            >
+                                <Edit size={14} />
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 <div className="time-slot__content">
@@ -102,6 +136,27 @@ const TimeSlotGrid = ({ date, onSlotClick }) => {
 
     return (
         <div className="time-slot-grid">
+            {/* Выпадающий список по классам */}
+            {uniqueGrades.length > 1 && (
+                <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid var(--color-border)' }}>
+                    <label style={{ fontWeight: '600', color: '#1e293b', fontSize: '0.95rem', minWidth: '120px' }}>
+                        Фильтр по классу:
+                    </label>
+                    <select
+                        className="input-field"
+                        value={selectedGrade}
+                        onChange={(e) => setSelectedGrade(e.target.value)}
+                        style={{ maxWidth: '300px', fontSize: '0.95rem' }}
+                    >
+                        {uniqueGrades.map(grade => (
+                            <option key={grade} value={grade}>
+                                {grade}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+            )}
+
             <div className="time-slot-grid__header">
                 <h3>Расписание на {date.toLocaleDateString('ru-RU', {
                     weekday: 'long',
@@ -126,16 +181,24 @@ const TimeSlotGrid = ({ date, onSlotClick }) => {
             </div>
 
             <div className="time-slot-grid__content">
-                {Object.keys(slotsByLesson).sort((a, b) => a - b).map(lessonNumber => (
-                    <div key={lessonNumber} className="time-slot-grid__lesson-group">
-                        <div className="lesson-group__number">
-                            Урок {lessonNumber}
-                        </div>
-                        <div className="lesson-group__slots">
-                            {slotsByLesson[lessonNumber].map(slot => renderSlot(slot))}
-                        </div>
+                {Object.keys(slotsByLesson).length === 0 ? (
+                    <div className="time-slot-grid__empty-state">
+                        <div className="empty-state__icon">📚</div>
+                        <h3>Нет слотов для класса "{selectedGrade}"</h3>
+                        <p>Выберите другой класс или создайте расписание</p>
                     </div>
-                ))}
+                ) : (
+                    Object.keys(slotsByLesson).sort((a, b) => a - b).map(lessonNumber => (
+                        <div key={lessonNumber} className="time-slot-grid__lesson-group">
+                            <div className="lesson-group__number">
+                                Урок {lessonNumber}
+                            </div>
+                            <div className="lesson-group__slots">
+                                {slotsByLesson[lessonNumber].map(slot => renderSlot(slot))}
+                            </div>
+                        </div>
+                    ))
+                )}
             </div>
         </div>
     );

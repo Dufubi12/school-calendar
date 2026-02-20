@@ -6,7 +6,8 @@ import {
     checkTeacherConflict,
     getAvailableTeachers,
     getSlotsByDate,
-    migrateOldEvents
+    migrateOldEvents,
+    calculateTeacherSalary
 } from '../utils/scheduleUtils';
 
 const ScheduleContext = createContext();
@@ -173,13 +174,20 @@ export const ScheduleProvider = ({ children }) => {
         setBellSchedule(newSchedule);
     };
 
+    const getTeacherSalaryInfo = (teacherId, startDate = null, endDate = null) => {
+        const teacher = teachers.find(t => t.id === teacherId);
+        if (!teacher || !teacher.lessonRate) return null;
+        return calculateTeacherSalary(teacherId, timeSlots, teacher.lessonRate, startDate, endDate);
+    };
+
     return (
         <ScheduleContext.Provider value={{
             events, addEvent, removeEvent,
             teachers, addTeacher, removeTeacher, updateTeacher,
             timeSlots, addTimeSlot, removeTimeSlot, updateTimeSlot, assignTeacherToSlot,
             getTeacherWorkload, checkConflict, getAvailableTeachersForSlot, getSlotsForDate,
-            bellSchedule, updateBellSchedule
+            bellSchedule, updateBellSchedule,
+            getTeacherSalaryInfo
         }}>
             {children}
         </ScheduleContext.Provider>

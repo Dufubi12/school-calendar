@@ -1,18 +1,22 @@
 import React, { useState } from 'react';
 import { useSchedule } from '../context/ScheduleContext';
 import { SUBJECTS, GRADES, AVAILABILITY_PRESETS } from '../data/mockData';
-import { Trash2, UserPlus, BookOpen, Pencil, Plus, X } from 'lucide-react';
+import { Trash2, UserPlus, BookOpen, Pencil, Plus, X, DollarSign } from 'lucide-react';
 import TeacherWorkloadCard from '../components/Teachers/TeacherWorkloadCard';
+import TeacherSalaryModal from '../components/Teachers/TeacherSalaryModal';
 
 const TeachersPage = () => {
     const { teachers, addTeacher, removeTeacher, updateTeacher } = useSchedule();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingId, setEditingId] = useState(null);
+    const [isSalaryModalOpen, setIsSalaryModalOpen] = useState(false);
+    const [selectedTeacher, setSelectedTeacher] = useState(null);
 
     // Form State
     const [name, setName] = useState('');
     const [subject, setSubject] = useState(SUBJECTS[0]);
     const [grades, setGrades] = useState([GRADES[1]]);
+    const [lessonRate, setLessonRate] = useState('');
     const [workSchedule, setWorkSchedule] = useState({
         startDate: '',
         endDate: '',
@@ -23,6 +27,7 @@ const TeachersPage = () => {
         setName('');
         setSubject(SUBJECTS[0]);
         setGrades([GRADES[1]]);
+        setLessonRate('');
         setWorkSchedule({
             startDate: '',
             endDate: '',
@@ -36,6 +41,7 @@ const TeachersPage = () => {
         setName(teacher.name);
         setSubject(teacher.subject);
         setGrades(teacher.grades || []);
+        setLessonRate(teacher.lessonRate || '');
         setWorkSchedule(teacher.workSchedule || {
             startDate: '',
             endDate: '',
@@ -57,6 +63,7 @@ const TeachersPage = () => {
             name,
             subject,
             grades,
+            lessonRate: lessonRate ? Number(lessonRate) : 0,
             workSchedule
         };
 
@@ -161,6 +168,26 @@ const TeachersPage = () => {
                         <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--color-border)' }}>
                             <TeacherWorkloadCard teacherId={teacher.id} showDetails={false} />
                         </div>
+
+                        {/* Salary Button */}
+                        <button
+                            className="btn btn-secondary"
+                            onClick={() => {
+                                setSelectedTeacher(teacher);
+                                setIsSalaryModalOpen(true);
+                            }}
+                            style={{
+                                marginTop: '1rem',
+                                width: '100%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '0.5rem'
+                            }}
+                        >
+                            <DollarSign size={18} />
+                            Посмотреть зарплату
+                        </button>
                     </div>
                 ))}
             </div>
@@ -194,19 +221,32 @@ const TeachersPage = () => {
                                 </select>
                             </div>
                             <div>
-                                <label className="label">Классы</label>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', maxHeight: '100px', overflowY: 'auto' }}>
-                                    {GRADES.map(grade => (
-                                        <label key={grade} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}>
-                                            <input
-                                                type="checkbox"
-                                                checked={grades.includes(grade)}
-                                                onChange={() => toggleGrade(grade)}
-                                            />
-                                            {grade}
-                                        </label>
-                                    ))}
-                                </div>
+                                <label className="label">Ставка за урок (₽)</label>
+                                <input
+                                    className="input-field"
+                                    type="number"
+                                    min="0"
+                                    step="100"
+                                    placeholder="1000"
+                                    value={lessonRate}
+                                    onChange={e => setLessonRate(e.target.value)}
+                                />
+                            </div>
+                        </div>
+
+                        <div style={{ marginBottom: '1rem' }}>
+                            <label className="label">Классы</label>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                {GRADES.map(grade => (
+                                    <label key={grade} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={grades.includes(grade)}
+                                            onChange={() => toggleGrade(grade)}
+                                        />
+                                        {grade}
+                                    </label>
+                                ))}
                             </div>
                         </div>
 
@@ -279,6 +319,17 @@ const TeachersPage = () => {
                     </div>
                 </div>
             )}
+
+            {/* Salary Modal */}
+            <TeacherSalaryModal
+                teacher={selectedTeacher}
+                isOpen={isSalaryModalOpen}
+                onClose={() => {
+                    setIsSalaryModalOpen(false);
+                    setSelectedTeacher(null);
+                }}
+                onEdit={handleEdit}
+            />
         </div>
     );
 };

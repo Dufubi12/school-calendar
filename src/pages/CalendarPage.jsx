@@ -11,6 +11,7 @@ import TimeSlotManager from '../components/Schedule/TimeSlotManager';
 import TeacherAvailabilityPanel from '../components/Teachers/TeacherAvailabilityPanel';
 import BellScheduleEditor from '../components/Schedule/BellScheduleEditor';
 import ClubModal from '../components/Schedule/ClubModal';
+import SlotEditModal from '../components/Schedule/SlotEditModal';
 import { useSchedule } from '../context/ScheduleContext';
 
 const CalendarPage = () => {
@@ -29,9 +30,11 @@ const CalendarPage = () => {
     const [isAvailabilityPanelOpen, setIsAvailabilityPanelOpen] = useState(false);
     const [isBellScheduleEditorOpen, setIsBellScheduleEditorOpen] = useState(false);
     const [isClubModalOpen, setIsClubModalOpen] = useState(false);
+    const [isSlotEditModalOpen, setIsSlotEditModalOpen] = useState(false);
+    const [editingSlot, setEditingSlot] = useState(null);
 
     // Data State
-    const { events, addEvent, removeEvent, assignTeacherToSlot, bellSchedule, updateBellSchedule } = useSchedule();
+    const { events, addEvent, removeEvent, assignTeacherToSlot, bellSchedule, updateBellSchedule, updateTimeSlot } = useSchedule();
 
     const handleNextMonth = () => {
         setCurrentDate(nextMonth(currentDate));
@@ -66,6 +69,17 @@ const CalendarPage = () => {
 
     const handleTeacherAssignment = (slotId, teacherId, subject) => {
         assignTeacherToSlot(slotId, teacherId, subject);
+    };
+
+    const handleEditSlot = (slot) => {
+        setEditingSlot(slot);
+        setIsSlotEditModalOpen(true);
+    };
+
+    const handleSlotUpdate = (updatedSlot) => {
+        updateTimeSlot(updatedSlot);
+        setIsSlotEditModalOpen(false);
+        setEditingSlot(null);
     };
 
     return (
@@ -123,6 +137,7 @@ const CalendarPage = () => {
                 <TimeSlotGrid
                     date={selectedDate || new Date()}
                     onSlotClick={handleSlotClick}
+                    onEditSlot={handleEditSlot}
                 />
             )}
 
@@ -194,6 +209,17 @@ const CalendarPage = () => {
                 isOpen={isClubModalOpen}
                 onClose={() => setIsClubModalOpen(false)}
                 onSave={handleAddEvent}
+            />
+
+            {/* 9. Slot Edit Modal */}
+            <SlotEditModal
+                slot={editingSlot}
+                isOpen={isSlotEditModalOpen}
+                onClose={() => {
+                    setIsSlotEditModalOpen(false);
+                    setEditingSlot(null);
+                }}
+                onSave={handleSlotUpdate}
             />
         </div>
     );

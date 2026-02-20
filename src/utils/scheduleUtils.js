@@ -232,6 +232,31 @@ export const getSlotsByDate = (date, allSlots) => {
 };
 
 /**
+ * Calculate teacher salary based on lessons
+ * @param {number} teacherId - Teacher ID
+ * @param {Array} timeSlots - All time slots
+ * @param {number} lessonRate - Rate per lesson in rubles
+ * @param {Date} startDate - Start date for calculation (optional)
+ * @param {Date} endDate - End date for calculation (optional)
+ * @returns {Object} Salary information
+ */
+export const calculateTeacherSalary = (teacherId, timeSlots, lessonRate, startDate = null, endDate = null) => {
+    const workload = calculateWorkload(teacherId, timeSlots, startDate, endDate);
+
+    return {
+        teacherId,
+        totalLessons: workload.totalSlots,
+        lessonRate,
+        monthlySalary: workload.totalSlots * lessonRate,
+        weeklyLessons: Math.round(workload.averagePerDay * 5 * 10) / 10, // Round to 1 decimal
+        weeklySalary: Math.round(workload.averagePerDay * 5 * lessonRate),
+        lessonsByDay: workload.slotsByDay,
+        averagePerDay: workload.averagePerDay,
+        period: startDate && endDate ? { startDate, endDate } : null
+    };
+};
+
+/**
  * Get workload level category
  * @param {number} percentage - Workload percentage
  * @returns {Object} Category info with color and label

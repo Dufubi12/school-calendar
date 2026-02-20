@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useSchedule } from '../../context/ScheduleContext';
 import { generateDefaultSchedule, DEFAULT_SCHEDULE_TEMPLATE } from '../../utils/scheduleUtils';
+import { CLASS_LIST } from '../../data/mockData';
 import './TimeSlotManager.css';
 
 const TimeSlotManager = ({ isOpen, onClose }) => {
     const { addTimeSlot, timeSlots } = useSchedule();
-    const [grade, setGrade] = useState('9А');
+    const [grade, setGrade] = useState(CLASS_LIST[0] || '9А');
     const [selectedDays, setSelectedDays] = useState([1, 2, 3, 4, 5]); // Mon-Fri
 
     if (!isOpen) return null;
@@ -70,13 +71,17 @@ const TimeSlotManager = ({ isOpen, onClose }) => {
 
                     <div className="form-group">
                         <label className="form-label">Класс</label>
-                        <input
-                            type="text"
+                        <select
                             className="form-input"
                             value={grade}
                             onChange={(e) => setGrade(e.target.value)}
-                            placeholder="9А"
-                        />
+                        >
+                            {CLASS_LIST.map(className => (
+                                <option key={className} value={className}>
+                                    {className}
+                                </option>
+                            ))}
+                        </select>
                     </div>
 
                     <div className="form-group">

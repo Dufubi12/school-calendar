@@ -3,10 +3,16 @@ import { useSchedule } from '../../context/ScheduleContext';
 import { getSlotStatus, getWorkloadLevel } from '../../utils/scheduleUtils';
 import './TimeSlot.css';
 
-const TimeSlotGrid = ({ date, onSlotClick }) => {
+const TimeSlotGrid = ({ date, onSlotClick, selectedClass = 'all' }) => {
     const { getSlotsForDate, teachers, timeSlots } = useSchedule();
 
-    const slots = getSlotsForDate(date);
+    // Get all slots for the date
+    let slots = getSlotsForDate(date);
+
+    // Filter by selected class if not 'all'
+    if (selectedClass !== 'all') {
+        slots = slots.filter(slot => slot.grade === selectedClass);
+    }
 
     // Group slots by lesson number
     const slotsByLesson = {};

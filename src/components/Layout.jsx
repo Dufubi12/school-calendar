@@ -1,5 +1,5 @@
 import { Outlet, Link } from 'react-router-dom';
-import { Calendar, Users } from 'lucide-react';
+import { Calendar, Users, BarChart3 } from 'lucide-react';
 
 const Layout = () => {
     return (
@@ -21,6 +21,9 @@ const Layout = () => {
                     </Link>
                     <Link to="/teachers" style={{ textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                         <Users size={18} /> Учителя
+                    </Link>
+                    <Link to="/statistics" style={{ textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                        <BarChart3 size={18} /> Статистика
                     </Link>
                 </nav>
             </header>

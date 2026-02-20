@@ -17,6 +17,10 @@ const CalendarPage = () => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(null);
     const [viewMode, setViewMode] = useState('calendar'); // 'calendar' or 'schedule'
+    const [selectedClass, setSelectedClass] = useState('all'); // 'all' or specific class like '7А'
+
+    // Available classes
+    const availableClasses = ['all', '1А', '1Б', '2А', '2Б', '2В', '3А', '3Б', '3В', '4А', '4Б', '4В', '5А', '5Б', '5В', '6А', '6Б', '7А', '7Б', '8А', '9А'];
 
     // Modals State
     const [isDetailsOpen, setIsDetailsOpen] = useState(false);
@@ -90,6 +94,34 @@ const CalendarPage = () => {
                 >
                     ⏰ Расписание по слотам
                 </button>
+
+                {/* Class Filter */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '16px' }}>
+                    <label htmlFor="class-filter" style={{ fontSize: '14px', fontWeight: '500' }}>
+                        📚 Класс:
+                    </label>
+                    <select
+                        id="class-filter"
+                        value={selectedClass}
+                        onChange={(e) => setSelectedClass(e.target.value)}
+                        style={{
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            border: '2px solid #e5e7eb',
+                            fontSize: '14px',
+                            fontWeight: '500',
+                            cursor: 'pointer',
+                            backgroundColor: '#fff'
+                        }}
+                    >
+                        {availableClasses.map(cls => (
+                            <option key={cls} value={cls}>
+                                {cls === 'all' ? 'Все классы' : cls}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
                 <button
                     className="btn btn-secondary"
                     onClick={() => setIsBellScheduleEditorOpen(true)}
@@ -118,11 +150,13 @@ const CalendarPage = () => {
                     currentDate={currentDate}
                     onDayClick={handleDayClick}
                     substitutions={events} // Grid will display all events
+                    selectedClass={selectedClass}
                 />
             ) : (
                 <TimeSlotGrid
                     date={selectedDate || new Date()}
                     onSlotClick={handleSlotClick}
+                    selectedClass={selectedClass}
                 />
             )}
 

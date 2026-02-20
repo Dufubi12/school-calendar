@@ -1,0 +1,229 @@
+/* Time Slot Styles */
+
+.time-slot-grid {
+    padding: 20px;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.time-slot-grid--empty {
+    min-height: 400px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.time-slot-grid__empty-state {
+    text-align: center;
+    color: #6b7280;
+}
+
+.empty-state__icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+}
+
+.time-slot-grid__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.time-slot-grid__header h3 {
+    margin: 0;
+    font-size: 20px;
+    color: #111827;
+    text-transform: capitalize;
+}
+
+.time-slot-grid__legend {
+    display: flex;
+    gap: 16px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    color: #6b7280;
+}
+
+.legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.time-slot-grid__content {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.time-slot-grid__lesson-group {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.lesson-group__number {
+    min-width: 80px;
+    padding: 12px;
+    background: #f3f4f6;
+    border-radius: 8px;
+    font-weight: 600;
+    color: #374151;
+    text-align: center;
+    font-size: 14px;
+}
+
+.lesson-group__slots {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 12px;
+}
+
+/* Individual Time Slot */
+.time-slot {
+    background: #ffffff;
+    border: 2px solid #e5e7eb;
+    border-left-width: 4px;
+    border-radius: 8px;
+    padding: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.time-slot:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.time-slot--free {
+    border-left-color: #10b981;
+}
+
+.time-slot--assigned {
+    border-left-color: #f59e0b;
+}
+
+.time-slot--conflict {
+    border-left-color: #ef4444;
+    background: #fef2f2;
+}
+
+.time-slot__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.time-slot__time {
+    font-size: 13px;
+    font-weight: 600;
+    color: #6b7280;
+}
+
+.time-slot__status-badge {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+}
+
+.time-slot__content {
+    margin-bottom: 8px;
+}
+
+.time-slot__subject {
+    font-size: 16px;
+    font-weight: 600;
+    color: #111827;
+    margin-bottom: 4px;
+}
+
+.time-slot__grade {
+    font-size: 13px;
+    color: #6b7280;
+    margin-bottom: 8px;
+}
+
+.time-slot__teacher {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: #374151;
+}
+
+.time-slot__teacher-name {
+    flex: 1;
+}
+
+.time-slot__teacher-empty {
+    color: #9ca3af;
+    font-style: italic;
+}
+
+.time-slot__workload-badge {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+}
+
+.time-slot__room {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 4px;
+}
+
+.time-slot__status-label {
+    font-size: 11px;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #e5e7eb;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .time-slot-grid__header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .time-slot-grid__legend {
+        flex-wrap: wrap;
+    }
+
+    .lesson-group__slots {
+        grid-template-columns: 1fr;
+    }
+
+    .time-slot-grid__lesson-group {
+        flex-direction: column;
+    }
+
+    .lesson-group__number {
+        width: 100%;
+    }
+}

@@ -266,7 +266,7 @@ export const ScheduleProvider = ({ children }) => {
 
     // 2. Teachers List
     const [teachers, setTeachers] = useState(() => {
-        const saved = localStorage.getItem('school_calendar_teachers');
+        const saved = localStorage.getItem('school_calendar_teachers_v2');
         if (saved) {
             try {
                 return JSON.parse(saved);
@@ -285,7 +285,7 @@ export const ScheduleProvider = ({ children }) => {
     }, [userEvents]);
 
     useEffect(() => {
-        localStorage.setItem('school_calendar_teachers', JSON.stringify(teachers));
+        localStorage.setItem('school_calendar_teachers_v2', JSON.stringify(teachers));
     }, [teachers]);
 
     useEffect(() => {

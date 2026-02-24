@@ -6,8 +6,6 @@ import { format } from 'date-fns';
 import { getAvailableTeachers } from '../../utils/scheduleUtils';
 
 const SubstitutionModal = ({ date, isOpen, onClose, onSave, initialData }) => {
-    if (!isOpen) return null;
-
     const { events, teachers, timeSlots } = useSchedule();
 
     // Form State
@@ -101,6 +99,8 @@ const SubstitutionModal = ({ date, isOpen, onClose, onSave, initialData }) => {
             return a.isBusy ? 1 : -1;
         });
     }, [absentTeacherId, selectedSubject, selectedGrade, selectedLesson, startTime, endTime, date, events, teachers, timeSlots]);
+
+    if (!isOpen) return null;
 
     const handleSave = () => {
         if (onSave && date && absentTeacherId && selectedSubstituteId) {

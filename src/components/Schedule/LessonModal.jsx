@@ -5,8 +5,6 @@ import { X } from 'lucide-react';
 import { format } from 'date-fns';
 
 const LessonModal = ({ date, isOpen, onClose, onSave }) => {
-    if (!isOpen) return null;
-
     const { teachers, events } = useSchedule();
 
     const [teacherId, setTeacherId] = useState('');
@@ -15,6 +13,8 @@ const LessonModal = ({ date, isOpen, onClose, onSave }) => {
     const [selectedLesson, setSelectedLesson] = useState(1);
     const [startTime, setStartTime] = useState('');
     const [endTime, setEndTime] = useState('');
+
+    if (!isOpen) return null;
 
     // Helpers
     const getLessonTime = (lessonNum) => {

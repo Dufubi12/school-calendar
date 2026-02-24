@@ -55,7 +55,7 @@ const CalendarPage = () => {
     };
 
     const openSubstitutionModal = (teacherId = null, lessonNumber = 1, subject = null, grade = null, startTime = null, endTime = null) => {
-        if (teacherId) {
+        if (teacherId || subject || grade || startTime) {
             setSubModalData({ teacherId, lessonNumber, subject, grade, startTime, endTime });
         } else {
             setSubModalData(null);
@@ -166,6 +166,7 @@ const CalendarPage = () => {
                 isOpen={isDetailsOpen}
                 onClose={() => setIsDetailsOpen(false)}
                 lessons={events}
+                selectedClass={selectedClass}
                 onAddLesson={() => setIsLessonModalOpen(true)}
                 onAddSubstitution={openSubstitutionModal}
                 onAddClub={() => setIsClubModalOpen(true)}

@@ -1,11 +1,60 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { X, Plus, UserX, Trash2, Users } from 'lucide-react';
 import { format } from 'date-fns';
+import { useSchedule } from '../../context/ScheduleContext';
 
-const DayDetailsModal = ({ date, isOpen, onClose, lessons = [], onAddLesson, onAddSubstitution, onAddClub, onRemoveLesson }) => {
+const DayDetailsModal = ({ date, isOpen, onClose, lessons = [], selectedClass = 'all', onAddLesson, onAddSubstitution, onAddClub, onRemoveLesson }) => {
+    const { teachers } = useSchedule();
+
     if (!isOpen) return null;
 
-    const dayLessons = lessons.filter(l => l.date === format(date, 'yyyy-MM-dd'));
+    // Resolve a partial teacher name (last name) to full name from teachers list
+    const resolveFullName = (partialName) => {
+        if (!partialName || partialName === 'Не назначен') return partialName;
+        if (partialName.includes(' ')) return partialName;
+        const match = teachers.find(t => t.name.split(' ')[0] === partialName);
+        return match ? match.name : partialName;
+    };
+
+    // Resolve teacher name to teacher ID
+    const resolveTeacherId = (lesson) => {
+        if (lesson.teacherId) return lesson.teacherId;
+        const name = lesson.teacher || '';
+        if (!name || name === 'Не назначен') return null;
+        const match = teachers.find(t => t.name === name || t.name.split(' ')[0] === name);
+        return match ? match.id : null;
+    };
+
+    const allDayLessons = lessons.filter(l => l.date === format(date, 'yyyy-MM-dd'));
+    const dayLessons = selectedClass === 'all'
+        ? allDayLessons
+        : allDayLessons.filter(l => (l.className || l.grade) === selectedClass);
+
+    // Normalize lesson data (schedule events vs user events have different fields)
+    const normalize = (lesson) => {
+        // Time: schedule events have "time", user events have "startTime"/"endTime"
+        let startTime = lesson.startTime || '';
+        let endTime = lesson.endTime || '';
+        if (!startTime && lesson.time) {
+            const parts = lesson.time.split('-');
+            startTime = parts[0] || '';
+            endTime = parts[1] || '';
+        }
+
+        // Teacher: schedule events have "teacher", user events have details with "Name • Subject"
+        let teacherName = lesson.teacher || '';
+        if (!teacherName && lesson.details) {
+            const bulletParts = lesson.details.split('•');
+            if (bulletParts.length > 1) teacherName = bulletParts[0].trim();
+        }
+        // Resolve partial name (last name only) to full name from teachers list
+        teacherName = resolveFullName(teacherName);
+
+        // Grade: schedule events have "className", user events have "grade"
+        const grade = lesson.className || lesson.grade || '';
+
+        return { startTime, endTime, teacherName, grade };
+    };
 
     const handleDelete = (lessonId) => {
         if (confirm('Вы уверены, что хотите удалить этот урок из расписания?')) {
@@ -23,7 +72,10 @@ const DayDetailsModal = ({ date, isOpen, onClose, lessons = [], onAddLesson, onA
             <div className="card" style={{ width: '600px', maxWidth: '95%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                    <h2 style={{ margin: 0 }}>Расписание: {date?.toLocaleDateString()}</h2>
+                    <h2 style={{ margin: 0 }}>
+                        Расписание: {date?.toLocaleDateString()}
+                        {selectedClass !== 'all' && <span style={{ fontSize: '0.85rem', color: '#6366f1', marginLeft: '8px' }}>({selectedClass})</span>}
+                    </h2>
                     <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} /></button>
                 </div>
 
@@ -34,7 +86,9 @@ const DayDetailsModal = ({ date, isOpen, onClose, lessons = [], onAddLesson, onA
                         </div>
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                            {dayLessons.map(lesson => (
+                            {dayLessons.map(lesson => {
+                                const n = normalize(lesson);
+                                return (
                                 <div key={lesson.id} style={{
                                     padding: '0.75rem',
                                     border: '1px solid var(--color-border)',
@@ -45,11 +99,11 @@ const DayDetailsModal = ({ date, isOpen, onClose, lessons = [], onAddLesson, onA
                                     <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 100px', gap: '1rem', alignItems: 'center' }}>
                                         {/* Column 1: Time */}
                                         <div style={{ fontWeight: 'bold', fontSize: '0.9rem', textAlign: 'center', borderRight: '1px solid #eee' }}>
-                                            {lesson.startTime && lesson.endTime ? (
+                                            {n.startTime ? (
                                                 <>
-                                                    <div>{lesson.startTime}</div>
+                                                    <div>{n.startTime}</div>
                                                     <div style={{ fontSize: '0.8rem', color: '#666' }}>-</div>
-                                                    <div>{lesson.endTime}</div>
+                                                    <div>{n.endTime}</div>
                                                 </>
                                             ) : (
                                                 <span style={{ color: '#999' }}>--:--</span>
@@ -65,13 +119,13 @@ const DayDetailsModal = ({ date, isOpen, onClose, lessons = [], onAddLesson, onA
                                             <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
                                                 {lesson.type === 'substitution' && 'Замена: '}
                                                 {lesson.type === 'club' && 'Кружок: '}
-                                                {lesson.details.split('•')[0]} {/* Extract teacher name */}
+                                                {n.teacherName}
                                             </div>
                                         </div>
 
                                         {/* Column 3: Grade */}
                                         <div style={{ textAlign: 'center', fontSize: '0.9rem', fontWeight: '500', color: '#444' }}>
-                                            {lesson.grade}
+                                            {n.grade}
                                         </div>
                                     </div>
 
@@ -84,7 +138,14 @@ const DayDetailsModal = ({ date, isOpen, onClose, lessons = [], onAddLesson, onA
                                                     style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
                                                     onClick={() => {
                                                         onClose();
-                                                        onAddSubstitution(lesson.teacherId, lesson.lessonNumber, lesson.subject, lesson.grade, lesson.startTime, lesson.endTime);
+                                                        onAddSubstitution(
+                                                            resolveTeacherId(lesson),
+                                                            lesson.lessonNumber || null,
+                                                            lesson.subject,
+                                                            n.grade,
+                                                            n.startTime,
+                                                            n.endTime
+                                                        );
                                                     }}
                                                     title="Назначить замену"
                                                 >
@@ -116,7 +177,8 @@ const DayDetailsModal = ({ date, isOpen, onClose, lessons = [], onAddLesson, onA
                                         )}
                                     </div>
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </div>

@@ -203,6 +203,64 @@
     border-top: 1px solid #e5e7eb;
 }
 
+/* Gap (Window) Slot */
+.time-slot--gap {
+    border-left-color: #8b5cf6;
+    background: #faf5ff;
+    border-style: dashed;
+    cursor: default;
+}
+
+.time-slot--gap:hover {
+    transform: none;
+    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.15);
+}
+
+.gap-suggestions {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed #e9d5ff;
+}
+
+.gap-suggestions__title {
+    font-size: 11px;
+    color: #7c3aed;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.gap-suggestion-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 5px 8px;
+    margin-bottom: 4px;
+    background: #ffffff;
+    border: 1px solid #e9d5ff;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-size: 12px;
+}
+
+.gap-suggestion-btn:hover {
+    background: #ede9fe;
+    border-color: #8b5cf6;
+}
+
+.gap-suggestion-subject {
+    font-weight: 600;
+    color: #5b21b6;
+}
+
+.gap-suggestion-teacher {
+    color: #7c3aed;
+    font-size: 11px;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .time-slot-grid__header {

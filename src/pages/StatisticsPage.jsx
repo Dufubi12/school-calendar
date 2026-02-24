@@ -16,8 +16,38 @@ const StatisticsPage = () => {
         return new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
     });
 
-    // Payment settings
-    const [paymentPerLesson, setPaymentPerLesson] = useState(500); // Default: 500 руб за урок
+    // Individual payment rates per teacher (stored in localStorage)
+    const [teacherRates, setTeacherRates] = useState(() => {
+        const saved = localStorage.getItem('school_calendar_teacher_rates');
+        if (saved) {
+            try {
+                return JSON.parse(saved);
+            } catch (e) {
+                console.error('Failed to parse teacher rates', e);
+            }
+        }
+        return {}; // { teacherId: rate }
+    });
+
+    // Default rate for new teachers or "set all"
+    const [defaultRate, setDefaultRate] = useState(500);
+
+    // Save rates to localStorage
+    React.useEffect(() => {
+        localStorage.setItem('school_calendar_teacher_rates', JSON.stringify(teacherRates));
+    }, [teacherRates]);
+
+    // Set rate for specific teacher
+    const setTeacherRate = (teacherId, rate) => {
+        setTeacherRates(prev => ({ ...prev, [teacherId]: rate }));
+    };
+
+    // Apply default rate to all teachers
+    const applyDefaultRateToAll = () => {
+        const newRates = {};
+        teachers.forEach(t => { newRates[t.id] = defaultRate; });
+        setTeacherRates(newRates);
+    };
 
     // Calculate statistics for all teachers
     const teacherStats = useMemo(() => {
@@ -50,19 +80,21 @@ const StatisticsPage = () => {
                 });
             }
 
-            const payment = lessonCount * paymentPerLesson;
+            const rate = teacherRates[teacher.id] !== undefined ? teacherRates[teacher.id] : defaultRate;
+            const payment = lessonCount * rate;
 
             stats.push({
                 ...teacher,
                 lessonCount,
                 totalHours: totalHours.toFixed(1),
-                payment
+                payment,
+                rate
             });
         });
 
         // Sort by lesson count descending
         return stats.sort((a, b) => b.lessonCount - a.lessonCount);
-    }, [teachers, startDate, endDate, paymentPerLesson, getSlotsForDate]);
+    }, [teachers, startDate, endDate, teacherRates, defaultRate, getSlotsForDate]);
 
     // Calculate totals
     const totals = useMemo(() => {
@@ -75,12 +107,13 @@ const StatisticsPage = () => {
 
     // Export to CSV
     const exportToCSV = () => {
-        const headers = ['Учитель', 'Предмет', 'Количество уроков', 'Часов', 'Зарплата'];
+        const headers = ['Учитель', 'Предмет', 'Количество уроков', 'Часов', 'Ставка', 'Зарплата'];
         const rows = teacherStats.map(stat => [
             stat.name,
             stat.subject,
             stat.lessonCount,
             stat.totalHours,
+            stat.rate,
             stat.payment
         ]);
 
@@ -128,15 +161,18 @@ const StatisticsPage = () => {
 
                 <div className="filter-group">
                     <label>
-                        💰 Оплата за урок (руб):
+                        💰 Ставка по умолчанию (руб):
                         <input
                             type="number"
-                            value={paymentPerLesson}
-                            onChange={(e) => setPaymentPerLesson(Number(e.target.value))}
+                            value={defaultRate}
+                            onChange={(e) => setDefaultRate(Number(e.target.value))}
                             min="0"
                             step="50"
                         />
                     </label>
+                    <button className="btn btn-secondary" onClick={applyDefaultRateToAll}>
+                        Применить ко всем
+                    </button>
                 </div>
 
                 <button className="btn btn-primary" onClick={exportToCSV}>
@@ -174,6 +210,7 @@ const StatisticsPage = () => {
                             <th>Классы</th>
                             <th>Уроков</th>
                             <th>Часов</th>
+                            <th>Ставка (руб)</th>
                             <th>Зарплата</th>
                         </tr>
                     </thead>
@@ -200,6 +237,16 @@ const StatisticsPage = () => {
                                     </strong>
                                 </td>
                                 <td>{stat.totalHours}</td>
+                                <td>
+                                    <input
+                                        type="number"
+                                        className="rate-input"
+                                        value={stat.rate}
+                                        onChange={(e) => setTeacherRate(stat.id, Number(e.target.value))}
+                                        min="0"
+                                        step="50"
+                                    />
+                                </td>
                                 <td className="payment-cell">
                                     <strong>{stat.payment.toLocaleString()} ₽</strong>
                                 </td>
@@ -211,6 +258,7 @@ const StatisticsPage = () => {
                             <td colSpan="4"><strong>ИТОГО:</strong></td>
                             <td><strong>{totals.lessons}</strong></td>
                             <td><strong>{totals.hours.toFixed(1)}</strong></td>
+                            <td></td>
                             <td className="payment-cell">
                                 <strong>{totals.payment.toLocaleString()} ₽</strong>
                             </td>

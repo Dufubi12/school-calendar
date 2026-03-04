@@ -16,17 +16,20 @@ const StatisticsPage = () => {
         return new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
     });
 
+    // Ставки по умолчанию для конкретных педагогов
+    const FORCED_RATES = { 4: 700 }; // Козлова Галина - 700 руб
+
     // Individual payment rates per teacher (stored in localStorage)
     const [teacherRates, setTeacherRates] = useState(() => {
         const saved = localStorage.getItem('school_calendar_teacher_rates');
         if (saved) {
             try {
-                return JSON.parse(saved);
+                return { ...JSON.parse(saved), ...FORCED_RATES };
             } catch (e) {
                 console.error('Failed to parse teacher rates', e);
             }
         }
-        return {}; // { teacherId: rate }
+        return { ...FORCED_RATES };
     });
 
     // Default rate for new teachers or "set all"

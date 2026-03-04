@@ -6,14 +6,15 @@ import { format, parse, isSameDay } from 'date-fns';
  * Default schedule template (расписание звонков)
  */
 export const DEFAULT_SCHEDULE_TEMPLATE = [
-    { lessonNumber: 1, startTime: '08:30', endTime: '09:15' },
-    { lessonNumber: 2, startTime: '09:25', endTime: '10:10' },
-    { lessonNumber: 3, startTime: '10:30', endTime: '11:15' },
-    { lessonNumber: 4, startTime: '11:35', endTime: '12:20' },
-    { lessonNumber: 5, startTime: '12:30', endTime: '13:15' },
-    { lessonNumber: 6, startTime: '13:25', endTime: '14:10' },
-    { lessonNumber: 7, startTime: '14:20', endTime: '15:05' },
-    { lessonNumber: 8, startTime: '15:15', endTime: '16:00' },
+    { lessonNumber: 0, startTime: '08:45', endTime: '09:00', label: 'Сонастройка' },
+    { lessonNumber: 1, startTime: '09:00', endTime: '09:45' },
+    { lessonNumber: 2, startTime: '09:55', endTime: '10:40' },
+    { lessonNumber: 3, startTime: '10:50', endTime: '11:35' },
+    { lessonNumber: 4, startTime: '11:45', endTime: '12:30' },
+    { lessonNumber: 5, startTime: '12:40', endTime: '13:25' },
+    { lessonNumber: 6, startTime: '13:35', endTime: '14:20' },
+    { lessonNumber: 7, startTime: '14:30', endTime: '15:15' },
+    { lessonNumber: 8, startTime: '15:25', endTime: '16:10' },
 ];
 
 /**

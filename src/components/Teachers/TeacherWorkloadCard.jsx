@@ -18,8 +18,7 @@ const TeacherWorkloadCard = ({ teacherId, showDetails = false }) => {
         { key: 'wednesday', label: 'Ср' },
         { key: 'thursday', label: 'Чт' },
         { key: 'friday', label: 'Пт' },
-        { key: 'saturday', label: 'Сб' },
-        { key: 'sunday', label: 'Вс' }
+        { key: 'saturday', label: 'Сб' }
     ];
 
     const maxLessonsPerDay = Math.max(...Object.values(workload.slotsByDay), 1);

@@ -165,26 +165,22 @@ export const useSchedule = () => {
 
 export const ScheduleProvider = ({ children }) => {
     // 0. Bell Schedule (User customizable)
+    // Всегда используем актуальное расписание звонков
     const [bellSchedule, setBellSchedule] = useState(() => {
-        const saved = localStorage.getItem('school_calendar_bell_schedule');
-        if (saved) {
-            try {
-                return JSON.parse(saved);
-            } catch (e) {
-                console.error('Failed to parse bell schedule data', e);
-            }
-        }
-        // Default schedule
-        return [
-            { lessonNumber: 1, startTime: '08:30', endTime: '09:15', label: '1 урок' },
-            { lessonNumber: 2, startTime: '09:25', endTime: '10:10', label: '2 урок' },
-            { lessonNumber: 3, startTime: '10:30', endTime: '11:15', label: '3 урок' },
-            { lessonNumber: 4, startTime: '11:35', endTime: '12:20', label: '4 урок' },
-            { lessonNumber: 5, startTime: '12:30', endTime: '13:15', label: '5 урок' },
-            { lessonNumber: 6, startTime: '13:25', endTime: '14:10', label: '6 урок' },
-            { lessonNumber: 7, startTime: '14:20', endTime: '15:05', label: '7 урок' },
-            { lessonNumber: 8, startTime: '15:15', endTime: '16:00', label: '8 урок' },
+        // Принудительно обновляем расписание звонков
+        const newSchedule = [
+            { lessonNumber: 0, startTime: '08:45', endTime: '09:00', label: 'Сонастройка' },
+            { lessonNumber: 1, startTime: '09:00', endTime: '09:45', label: '1 урок' },
+            { lessonNumber: 2, startTime: '09:55', endTime: '10:40', label: '2 урок' },
+            { lessonNumber: 3, startTime: '10:50', endTime: '11:35', label: '3 урок' },
+            { lessonNumber: 4, startTime: '11:45', endTime: '12:30', label: '4 урок' },
+            { lessonNumber: 5, startTime: '12:40', endTime: '13:25', label: '5 урок' },
+            { lessonNumber: 6, startTime: '13:35', endTime: '14:20', label: '6 урок' },
+            { lessonNumber: 7, startTime: '14:30', endTime: '15:15', label: '7 урок' },
+            { lessonNumber: 8, startTime: '15:25', endTime: '16:10', label: '8 урок' },
         ];
+        localStorage.setItem('school_calendar_bell_schedule', JSON.stringify(newSchedule));
+        return newSchedule;
     });
 
     // 1. User Events (только замены и кружки, БЕЗ расписания)

@@ -3,6 +3,7 @@ import { ScheduleProvider } from './context/ScheduleContext'
 import Layout from './components/Layout'
 import CalendarPage from './pages/CalendarPage'
 import TeachersPage from './pages/TeachersPage'
+import StatsPage from './pages/StatsPage'
 import './App.css'
 
 function App() {
@@ -14,6 +15,7 @@ function App() {
             <Route path="/" element={<CalendarPage />} />
             <Route path="/substitutions" element={<CalendarPage />} />
             <Route path="/teachers" element={<TeachersPage />} />
+            <Route path="/stats" element={<StatsPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

@@ -61,18 +61,34 @@ export const ScheduleProvider = ({ children }) => {
         }));
     });
 
-    // 2. Teachers List
+    // 2. Teachers List (with migration for new fields like rates)
     const [teachers, setTeachers] = useState(() => {
         const saved = localStorage.getItem('school_calendar_teachers');
         if (saved) {
             try {
-                return JSON.parse(saved);
+                let savedTeachers = JSON.parse(saved);
+
+                // Migrate: merge rates from mock data into saved teachers
+                savedTeachers = savedTeachers.map(t => {
+                    const mockTeacher = MOCK_DATA_TEACHERS.find(m => m.id === t.id);
+                    if (mockTeacher && mockTeacher.rates && !t.rates) {
+                        return { ...t, rates: mockTeacher.rates };
+                    }
+                    return t;
+                });
+
+                // Add any new teachers from mock data that don't exist in saved
+                const savedIds = new Set(savedTeachers.map(t => t.id));
+                const newTeachers = MOCK_DATA_TEACHERS.filter(m => !savedIds.has(m.id));
+                if (newTeachers.length > 0) {
+                    savedTeachers = [...savedTeachers, ...newTeachers];
+                }
+
+                return savedTeachers;
             } catch (e) {
                 console.error('Failed to parse teachers data', e);
             }
         }
-        // Force import in case module resolution is needed, or just use MOCK from imports
-        // Re-verify imports at top of file
         return MOCK_DATA_TEACHERS;
     });
 

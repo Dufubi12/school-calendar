@@ -1,14 +1,158 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { INITIAL_SUBSTITUTIONS, TEACHERS as MOCK_DATA_TEACHERS } from '../data/mockData';
+import { INITIAL_SUBSTITUTIONS, TEACHERS as MOCK_DATA_TEACHERS, REAL_SCHEDULE } from '../data/mockData';
 import {
     calculateWorkload,
     findConflicts,
     checkTeacherConflict,
     getAvailableTeachers,
-    getSlotsByDate,
     migrateOldEvents,
     calculateTeacherSalary
 } from '../utils/scheduleUtils';
+
+// Функция для поиска учителя по имени
+const findTeacherByName = (teacherName) => {
+    if (!teacherName || teacherName === 'Не назначен') return null;
+
+    // Ищем точное совпадение
+    let teacher = MOCK_DATA_TEACHERS.find(t => t.name === teacherName);
+    if (teacher) return teacher.id;
+
+    // Ищем по частичному совпадению (фамилия или имя)
+    teacher = MOCK_DATA_TEACHERS.find(t =>
+        t.name.includes(teacherName) || teacherName.includes(t.name.split(' ')[0])
+    );
+
+    return teacher ? teacher.id : null;
+};
+
+// Функция для преобразования REAL_SCHEDULE в временные слоты
+const convertRealScheduleToTimeSlots = () => {
+    const slots = [];
+    let slotId = 5000;
+
+    // Маппинг дней недели на номера
+    const dayNameToNumber = {
+        'Понедельник': 1,
+        'Вторник': 2,
+        'Среда': 3,
+        'Четверг': 4,
+        'Пятница': 5,
+        'Суббота': 6,
+        'Воскресенье': 0
+    };
+
+    // Генерируем слоты для учебного года 2025-2026
+    const startDate = new Date(2025, 8, 1); // 1 сентября 2025
+    const endDate = new Date(2026, 5, 30); // 30 июня 2026
+
+    // Для каждого класса
+    Object.entries(REAL_SCHEDULE).forEach(([className, days]) => {
+        // Для каждого дня недели
+        Object.entries(days).forEach(([dayName, lessons]) => {
+            const targetDayNumber = dayNameToNumber[dayName];
+
+            // Генерируем слоты для всех дат этого дня недели
+            let currentDate = new Date(startDate);
+
+            // Находим первое вхождение нужного дня недели
+            while (currentDate.getDay() !== targetDayNumber && currentDate <= endDate) {
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+
+            // Создаем слоты для каждого вхождения этого дня недели
+            while (currentDate <= endDate) {
+                const dateStr = currentDate.toISOString().split('T')[0];
+
+                // Для каждого урока в этот день
+                lessons.forEach((lesson, lessonIndex) => {
+                    const [startTime, endTime] = lesson.time.split('-');
+                    const teacherId = findTeacherByName(lesson.teacher);
+
+                    slots.push({
+                        id: slotId++,
+                        date: dateStr,
+                        startTime: startTime,
+                        endTime: endTime,
+                        subject: lesson.subject,
+                        teacherId: teacherId,
+                        teacherName: lesson.teacher || 'Не назначен',
+                        grade: className,
+                        lessonNumber: lessonIndex + 1,
+                        type: 'regular'
+                    });
+                });
+
+                // Переходим к следующей неделе
+                currentDate.setDate(currentDate.getDate() + 7);
+            }
+        });
+    });
+
+    console.log(`Создано ${slots.length} временных слотов из расписания`);
+    return slots;
+};
+
+// Функция для преобразования REAL_SCHEDULE в события
+const convertRealScheduleToEvents = () => {
+    const events = [];
+    let eventId = 1000;
+
+    // Маппинг дней недели на номера
+    const dayNameToNumber = {
+        'Понедельник': 1,
+        'Вторник': 2,
+        'Среда': 3,
+        'Четверг': 4,
+        'Пятница': 5,
+        'Суббота': 6,
+        'Воскресенье': 0
+    };
+
+    // Генерируем события для учебного года 2025-2026 (сентябрь 2025 - июнь 2026)
+    const startDate = new Date(2025, 8, 1); // 1 сентября 2025
+    const endDate = new Date(2026, 5, 30); // 30 июня 2026
+
+    // Для каждого класса
+    Object.entries(REAL_SCHEDULE).forEach(([className, days]) => {
+        // Для каждого дня недели
+        Object.entries(days).forEach(([dayName, lessons]) => {
+            const targetDayNumber = dayNameToNumber[dayName];
+
+            // Генерируем события для всех дат этого дня недели в учебном году
+            let currentDate = new Date(startDate);
+
+            // Находим первое вхождение нужного дня недели
+            while (currentDate.getDay() !== targetDayNumber && currentDate <= endDate) {
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+
+            // Создаем события для каждого вхождения этого дня недели
+            while (currentDate <= endDate) {
+                const dateStr = currentDate.toISOString().split('T')[0]; // YYYY-MM-DD
+
+                // Для каждого урока в этот день
+                lessons.forEach(lesson => {
+                    events.push({
+                        id: eventId++,
+                        type: 'lesson',
+                        className: className,
+                        date: dateStr,
+                        subject: lesson.subject,
+                        teacher: lesson.teacher || 'Не назначен',
+                        time: lesson.time,
+                        details: `${className} - ${lesson.subject}${lesson.teacher ? ` (${lesson.teacher})` : ''}`
+                    });
+                });
+
+                // Переходим к следующей неделе
+                currentDate.setDate(currentDate.getDate() + 7);
+            }
+        });
+    });
+
+    console.log(`Загружено ${events.length} уроков из расписания`);
+    return events;
+};
 
 const ScheduleContext = createContext();
 
@@ -22,38 +166,35 @@ export const useSchedule = () => {
 
 export const ScheduleProvider = ({ children }) => {
     // 0. Bell Schedule (User customizable)
+    // Всегда используем актуальное расписание звонков
     const [bellSchedule, setBellSchedule] = useState(() => {
-        const saved = localStorage.getItem('school_calendar_bell_schedule');
-        if (saved) {
-            try {
-                return JSON.parse(saved);
-            } catch (e) {
-                console.error('Failed to parse bell schedule data', e);
-            }
-        }
-        // Default schedule
-        return [
-            { lessonNumber: 1, startTime: '08:30', endTime: '09:15', label: '1 урок' },
-            { lessonNumber: 2, startTime: '09:25', endTime: '10:10', label: '2 урок' },
-            { lessonNumber: 3, startTime: '10:30', endTime: '11:15', label: '3 урок' },
-            { lessonNumber: 4, startTime: '11:35', endTime: '12:20', label: '4 урок' },
-            { lessonNumber: 5, startTime: '12:30', endTime: '13:15', label: '5 урок' },
-            { lessonNumber: 6, startTime: '13:25', endTime: '14:10', label: '6 урок' },
-            { lessonNumber: 7, startTime: '14:20', endTime: '15:05', label: '7 урок' },
-            { lessonNumber: 8, startTime: '15:15', endTime: '16:00', label: '8 урок' },
+        // Принудительно обновляем расписание звонков
+        const newSchedule = [
+            { lessonNumber: 0, startTime: '08:45', endTime: '09:00', label: 'Сонастройка' },
+            { lessonNumber: 1, startTime: '09:00', endTime: '09:45', label: '1 урок' },
+            { lessonNumber: 2, startTime: '09:55', endTime: '10:40', label: '2 урок' },
+            { lessonNumber: 3, startTime: '10:50', endTime: '11:35', label: '3 урок' },
+            { lessonNumber: 4, startTime: '11:45', endTime: '12:30', label: '4 урок' },
+            { lessonNumber: 5, startTime: '12:40', endTime: '13:25', label: '5 урок' },
+            { lessonNumber: 6, startTime: '13:35', endTime: '14:20', label: '6 урок' },
+            { lessonNumber: 7, startTime: '14:30', endTime: '15:15', label: '7 урок' },
+            { lessonNumber: 8, startTime: '15:25', endTime: '16:10', label: '8 урок' },
         ];
+        localStorage.setItem('school_calendar_bell_schedule', JSON.stringify(newSchedule));
+        return newSchedule;
     });
 
-    // 1. Events (Lessons & Substitutions)
-    const [events, setEvents] = useState(() => {
-        const saved = localStorage.getItem('school_calendar_events');
+    // 1. User Events (только замены и кружки, БЕЗ расписания)
+    const [userEvents, setUserEvents] = useState(() => {
+        const saved = localStorage.getItem('school_calendar_user_events');
         if (saved) {
             try {
                 return JSON.parse(saved);
             } catch (e) {
-                console.error('Failed to parse schedule data', e);
+                console.error('Failed to parse user events', e);
             }
         }
+        // Начальные замены
         return INITIAL_SUBSTITUTIONS.map(s => ({
             ...s,
             type: 'substitution',
@@ -61,9 +202,68 @@ export const ScheduleProvider = ({ children }) => {
         }));
     });
 
-    // 2. Teachers List (with migration for new fields like rates)
+    // Функция для получения всех событий (расписание + пользовательские)
+    const getAllEvents = () => {
+        // Генерируем события расписания только для текущего месяца ± 2 месяца
+        const now = new Date();
+        const startDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+        const endDate = new Date(now.getFullYear(), now.getMonth() + 3, 0);
+
+        const scheduleEvents = generateEventsForDateRange(startDate, endDate);
+        return [...scheduleEvents, ...userEvents];
+    };
+
+    // Генерация событий для диапазона дат
+    const generateEventsForDateRange = (startDate, endDate) => {
+        const events = [];
+        let eventId = 1000;
+
+        const dayNameToNumber = {
+            'Понедельник': 1,
+            'Вторник': 2,
+            'Среда': 3,
+            'Четверг': 4,
+            'Пятница': 5,
+            'Суббота': 6,
+            'Воскресенье': 0
+        };
+
+        Object.entries(REAL_SCHEDULE).forEach(([className, days]) => {
+            Object.entries(days).forEach(([dayName, lessons]) => {
+                const targetDayNumber = dayNameToNumber[dayName];
+                let currentDate = new Date(startDate);
+
+                while (currentDate.getDay() !== targetDayNumber && currentDate <= endDate) {
+                    currentDate.setDate(currentDate.getDate() + 1);
+                }
+
+                while (currentDate <= endDate) {
+                    const dateStr = currentDate.toISOString().split('T')[0];
+
+                    lessons.forEach(lesson => {
+                        events.push({
+                            id: eventId++,
+                            type: 'lesson',
+                            className: className,
+                            date: dateStr,
+                            subject: lesson.subject,
+                            teacher: lesson.teacher || 'Не назначен',
+                            time: lesson.time,
+                            details: `${className} - ${lesson.subject}${lesson.teacher ? ` (${lesson.teacher})` : ''}`
+                        });
+                    });
+
+                    currentDate.setDate(currentDate.getDate() + 7);
+                }
+            });
+        });
+
+        return events;
+    };
+
+    // 2. Teachers List (with migration for rates)
     const [teachers, setTeachers] = useState(() => {
-        const saved = localStorage.getItem('school_calendar_teachers');
+        const saved = localStorage.getItem('school_calendar_teachers_v2');
         if (saved) {
             try {
                 let savedTeachers = JSON.parse(saved);
@@ -92,13 +292,13 @@ export const ScheduleProvider = ({ children }) => {
         return MOCK_DATA_TEACHERS;
     });
 
-    // Save to localStorage whenever events change
+    // Save to localStorage whenever userEvents change
     useEffect(() => {
-        localStorage.setItem('school_calendar_events', JSON.stringify(events));
-    }, [events]);
+        localStorage.setItem('school_calendar_user_events', JSON.stringify(userEvents));
+    }, [userEvents]);
 
     useEffect(() => {
-        localStorage.setItem('school_calendar_teachers', JSON.stringify(teachers));
+        localStorage.setItem('school_calendar_teachers_v2', JSON.stringify(teachers));
     }, [teachers]);
 
     useEffect(() => {
@@ -106,11 +306,15 @@ export const ScheduleProvider = ({ children }) => {
     }, [bellSchedule]);
 
     const addEvent = (event) => {
-        setEvents(prev => [...prev, event]);
+        const newEvent = {
+            ...event,
+            id: Date.now() // Генерируем уникальный ID
+        };
+        setUserEvents(prev => [...prev, newEvent]);
     };
 
     const removeEvent = (eventId) => {
-        setEvents(prev => prev.filter(e => e.id !== eventId));
+        setUserEvents(prev => prev.filter(e => e.id !== eventId));
     };
 
     const addTeacher = (teacher) => {
@@ -128,76 +332,166 @@ export const ScheduleProvider = ({ children }) => {
         setTeachers(prev => prev.map(t => t.id === updatedTeacher.id ? updatedTeacher : t));
     };
 
-    // 3. Time Slots Management
-    const [timeSlots, setTimeSlots] = useState(() => {
-        const saved = localStorage.getItem('school_calendar_timeslots');
+    // 3. Time Slots Management - генерируем по запросу
+    // Храним только пользовательские изменения (назначения учителей и т.д.)
+    const [customSlotData, setCustomSlotData] = useState(() => {
+        const saved = localStorage.getItem('school_calendar_custom_slots');
         if (saved) {
             try {
                 return JSON.parse(saved);
             } catch (e) {
-                console.error('Failed to parse time slots data', e);
+                console.error('Failed to parse custom slots data', e);
             }
         }
-        // Migrate old events if no time slots exist
-        const migratedSlots = migrateOldEvents(events);
-        return migratedSlots;
+        return {}; // { slotId: { teacherId, customField, etc } }
     });
 
-    // Save time slots to localStorage
+    // Save custom slot data to localStorage
     useEffect(() => {
-        localStorage.setItem('school_calendar_timeslots', JSON.stringify(timeSlots));
-    }, [timeSlots]);
+        localStorage.setItem('school_calendar_custom_slots', JSON.stringify(customSlotData));
+    }, [customSlotData]);
+
+    // Генерация слотов для конкретной даты
+    const generateSlotsForDate = (date) => {
+        const slots = [];
+        const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0];
+        const dateObj = new Date(dateStr);
+        const dayNumber = dateObj.getDay();
+
+        const numberToDayName = {
+            0: 'Воскресенье',
+            1: 'Понедельник',
+            2: 'Вторник',
+            3: 'Среда',
+            4: 'Четверг',
+            5: 'Пятница',
+            6: 'Суббота'
+        };
+
+        const dayName = numberToDayName[dayNumber];
+        let slotId = parseInt(dateStr.replace(/-/g, '')) * 1000; // Уникальный ID на основе даты
+
+        Object.entries(REAL_SCHEDULE).forEach(([className, days]) => {
+            if (days[dayName]) {
+                days[dayName].forEach((lesson, lessonIndex) => {
+                    const [startTime, endTime] = lesson.time.split('-');
+                    const teacherId = findTeacherByName(lesson.teacher);
+                    const currentSlotId = slotId++;
+
+                    // Применяем пользовательские данные если есть
+                    const customData = customSlotData[currentSlotId] || {};
+
+                    slots.push({
+                        id: currentSlotId,
+                        date: dateStr,
+                        startTime: startTime,
+                        endTime: endTime,
+                        subject: lesson.subject,
+                        teacherId: customData.teacherId !== undefined ? customData.teacherId : teacherId,
+                        teacherName: lesson.teacher || 'Не назначен',
+                        grade: className,
+                        lessonNumber: lessonIndex + 1,
+                        type: 'regular',
+                        ...customData
+                    });
+                });
+            }
+        });
+
+        return slots;
+    };
 
     const addTimeSlot = (slot) => {
-        setTimeSlots(prev => [...prev, slot]);
+        // Добавляем слот как пользовательский
+        setCustomSlotData(prev => ({
+            ...prev,
+            [slot.id]: slot
+        }));
     };
 
     const removeTimeSlot = (slotId) => {
-        setTimeSlots(prev => prev.filter(s => s.id !== slotId));
+        // Удаляем пользовательский слот
+        setCustomSlotData(prev => {
+            const newData = { ...prev };
+            delete newData[slotId];
+            return newData;
+        });
     };
 
     const updateTimeSlot = (updatedSlot) => {
-        setTimeSlots(prev => prev.map(s => s.id === updatedSlot.id ? updatedSlot : s));
+        setCustomSlotData(prev => ({
+            ...prev,
+            [updatedSlot.id]: {
+                ...prev[updatedSlot.id],
+                ...updatedSlot
+            }
+        }));
     };
 
     const assignTeacherToSlot = (slotId, teacherId, subject = null, rateId = null) => {
-        setTimeSlots(prev => prev.map(slot => {
-            if (slot.id === slotId) {
-                return { ...slot, teacherId, subject: subject || slot.subject, rateId };
+        setCustomSlotData(prev => ({
+            ...prev,
+            [slotId]: {
+                ...prev[slotId],
+                teacherId,
+                subject: subject || prev[slotId]?.subject,
+                rateId
             }
-            return slot;
         }));
+    };
+
+    // Получение слотов для даты
+    const getSlotsForDate = (date) => {
+        return generateSlotsForDate(date);
     };
 
     // Helper functions using imported utilities
     const getTeacherWorkload = (teacherId, startDate = null, endDate = null) => {
-        return calculateWorkload(teacherId, timeSlots, startDate, endDate);
+        // Генерируем слоты для диапазона дат
+        const slots = [];
+        const start = startDate ? new Date(startDate) : new Date();
+        const end = endDate ? new Date(endDate) : new Date(start.getFullYear(), start.getMonth() + 1, 0);
+
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            slots.push(...generateSlotsForDate(d));
+        }
+
+        return calculateWorkload(teacherId, slots, startDate, endDate);
     };
 
     const checkConflict = (teacherId, date, lessonNumber) => {
-        return checkTeacherConflict(teacherId, date, lessonNumber, timeSlots);
+        const slots = generateSlotsForDate(date);
+        return checkTeacherConflict(teacherId, date, lessonNumber, slots);
     };
 
     const getAvailableTeachersForSlot = (slot, subject = null) => {
-        return getAvailableTeachers(slot, teachers, timeSlots, subject);
-    };
-
-    const getSlotsForDate = (date) => {
-        return getSlotsByDate(date, timeSlots);
+        const slots = generateSlotsForDate(slot.date);
+        return getAvailableTeachers(slot, teachers, slots, subject);
     };
 
     const updateBellSchedule = (newSchedule) => {
         setBellSchedule(newSchedule);
     };
 
+    // Salary calculation with support for multiple rates
     const getTeacherSalaryInfo = (teacherId, startDate = null, endDate = null) => {
         const teacher = teachers.find(t => t.id === teacherId);
         if (!teacher) return null;
-        // Support multiple rates or single lessonRate
+
+        // Generate slots for the date range
+        const slots = [];
+        const start = startDate ? new Date(startDate) : new Date();
+        const end = endDate ? new Date(endDate) : new Date(start.getFullYear(), start.getMonth() + 1, 0);
+
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            slots.push(...generateSlotsForDate(d));
+        }
+
         const hasRates = teacher.rates && teacher.rates.length > 0;
         if (!hasRates && !teacher.lessonRate) return null;
+
         return calculateTeacherSalary(
-            teacherId, timeSlots, teacher.lessonRate || 0,
+            teacherId, slots, teacher.lessonRate || 0,
             startDate, endDate,
             hasRates ? teacher.rates : []
         );
@@ -205,11 +499,24 @@ export const ScheduleProvider = ({ children }) => {
 
     return (
         <ScheduleContext.Provider value={{
-            events, addEvent, removeEvent,
-            teachers, addTeacher, removeTeacher, updateTeacher,
-            timeSlots, addTimeSlot, removeTimeSlot, updateTimeSlot, assignTeacherToSlot,
-            getTeacherWorkload, checkConflict, getAvailableTeachersForSlot, getSlotsForDate,
-            bellSchedule, updateBellSchedule,
+            events: getAllEvents(), // Все события (расписание + пользовательские)
+            addEvent,
+            removeEvent,
+            teachers,
+            addTeacher,
+            removeTeacher,
+            updateTeacher,
+            timeSlots: [], // Deprecated, используйте getSlotsForDate
+            addTimeSlot,
+            removeTimeSlot,
+            updateTimeSlot,
+            assignTeacherToSlot,
+            getTeacherWorkload,
+            checkConflict,
+            getAvailableTeachersForSlot,
+            getSlotsForDate,
+            bellSchedule,
+            updateBellSchedule,
             getTeacherSalaryInfo
         }}>
             {children}

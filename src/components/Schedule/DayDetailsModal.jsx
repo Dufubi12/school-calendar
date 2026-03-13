@@ -1,157 +1,246 @@
-import React, { useState } from 'react';
-import { X, Plus, UserX, Trash2, Users } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { X, Plus, UserX, Trash2, Users, ChevronDown, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
+import { ru } from 'date-fns/locale';
 
 const DayDetailsModal = ({ date, isOpen, onClose, lessons = [], onAddLesson, onAddSubstitution, onAddClub, onRemoveLesson }) => {
-    if (!isOpen) return null;
+    const [expandedClasses, setExpandedClasses] = useState({});
+    const [filterClass, setFilterClass] = useState('all');
 
-    const dayLessons = lessons.filter(l => l.date === format(date, 'yyyy-MM-dd'));
+    if (!isOpen || !date) return null;
+
+    const dateStr = format(date, 'yyyy-MM-dd');
+    const dayLessons = lessons.filter(l => l.date === dateStr);
+
+    // Group by className
+    const grouped = {};
+    dayLessons.forEach(lesson => {
+        const cls = lesson.className || 'Без класса';
+        if (!grouped[cls]) grouped[cls] = [];
+        grouped[cls].push(lesson);
+    });
+
+    // Sort classes naturally: 1А, 1Б, 2А, ...
+    const sortedClasses = Object.keys(grouped).sort((a, b) => {
+        const numA = parseInt(a) || 99;
+        const numB = parseInt(b) || 99;
+        if (numA !== numB) return numA - numB;
+        return a.localeCompare(b, 'ru');
+    });
+
+    // Sort lessons within each class by time
+    sortedClasses.forEach(cls => {
+        grouped[cls].sort((a, b) => (a.startTime || a.time || '').localeCompare(b.startTime || b.time || ''));
+    });
+
+    const toggleClass = (cls) => {
+        setExpandedClasses(prev => ({ ...prev, [cls]: !prev[cls] }));
+    };
+
+    const filteredClasses = filterClass === 'all' ? sortedClasses : sortedClasses.filter(c => c === filterClass);
 
     const handleDelete = (lessonId) => {
-        if (confirm('Вы уверены, что хотите удалить этот урок из расписания?')) {
+        if (confirm('Удалить этот урок из расписания?')) {
             onRemoveLesson(lessonId);
         }
     };
 
-    return (
-        <div style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            backdropFilter: 'blur(4px)'
-        }}>
-            <div className="card" style={{ width: '600px', maxWidth: '95%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+    const dateFormatted = format(date, 'd MMMM yyyy, EEEE', { locale: ru });
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                    <h2 style={{ margin: 0 }}>Расписание: {date?.toLocaleDateString()}</h2>
-                    <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} /></button>
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="card" onClick={e => e.stopPropagation()} style={{
+                width: '700px', maxWidth: '95vw', maxHeight: '90vh',
+                display: 'flex', flexDirection: 'column', padding: 0
+            }}>
+                {/* Header */}
+                <div style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--color-border)'
+                }}>
+                    <div>
+                        <h2 style={{ margin: 0, fontSize: '1.1rem' }}>{dateFormatted}</h2>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
+                            {dayLessons.length} уроков, {sortedClasses.length} классов
+                        </span>
+                    </div>
+                    <button onClick={onClose} className="icon-btn"><X size={20} /></button>
                 </div>
 
-                <div style={{ flex: 1, overflowY: 'auto', marginBottom: '2rem' }}>
+                {/* Class filter */}
+                {sortedClasses.length > 1 && (
+                    <div style={{
+                        padding: '8px 1.5rem', borderBottom: '1px solid var(--color-border)',
+                        display: 'flex', gap: '4px', flexWrap: 'wrap', background: '#f8fafc'
+                    }}>
+                        <button
+                            onClick={() => setFilterClass('all')}
+                            style={{
+                                padding: '3px 10px', borderRadius: '12px', border: '1px solid',
+                                fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer',
+                                background: filterClass === 'all' ? 'var(--color-primary)' : 'white',
+                                color: filterClass === 'all' ? 'white' : 'var(--color-text-muted)',
+                                borderColor: filterClass === 'all' ? 'var(--color-primary)' : 'var(--color-border)'
+                            }}
+                        >
+                            Все
+                        </button>
+                        {sortedClasses.map(cls => (
+                            <button
+                                key={cls}
+                                onClick={() => setFilterClass(cls === filterClass ? 'all' : cls)}
+                                style={{
+                                    padding: '3px 10px', borderRadius: '12px', border: '1px solid',
+                                    fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer',
+                                    background: filterClass === cls ? 'var(--color-primary)' : 'white',
+                                    color: filterClass === cls ? 'white' : 'var(--color-text-muted)',
+                                    borderColor: filterClass === cls ? 'var(--color-primary)' : 'var(--color-border)'
+                                }}
+                            >
+                                {cls} <span style={{ opacity: 0.7 }}>({grouped[cls].length})</span>
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                {/* Content */}
+                <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.5rem' }}>
                     {dayLessons.length === 0 ? (
-                        <div style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '2rem' }}>
-                            На этот день уроков пока нет.
+                        <div style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '3rem 1rem' }}>
+                            На этот день уроков нет
                         </div>
                     ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                            {dayLessons.map(lesson => (
-                                <div key={lesson.id} style={{
-                                    padding: '0.75rem',
-                                    border: '1px solid var(--color-border)',
-                                    borderRadius: 'var(--radius)',
-                                    backgroundColor: lesson.type === 'substitution' ? '#fee2e2' : lesson.type === 'club' ? '#faf5ff' : 'white',
-                                    display: 'flex', flexDirection: 'column', gap: '0.5rem'
-                                }}>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 100px', gap: '1rem', alignItems: 'center' }}>
-                                        {/* Column 1: Time */}
-                                        <div style={{ fontWeight: 'bold', fontSize: '0.9rem', textAlign: 'center', borderRight: '1px solid #eee' }}>
-                                            {lesson.startTime && lesson.endTime ? (
-                                                <>
-                                                    <div>{lesson.startTime}</div>
-                                                    <div style={{ fontSize: '0.8rem', color: '#666' }}>-</div>
-                                                    <div>{lesson.endTime}</div>
-                                                </>
-                                            ) : (
-                                                <span style={{ color: '#999' }}>--:--</span>
-                                            )}
-                                        </div>
+                        filteredClasses.map(cls => {
+                            const classLessons = grouped[cls];
+                            const isExpanded = expandedClasses[cls] !== false; // default open
 
-                                        {/* Column 2: Subject & Teacher */}
-                                        <div>
-                                            <div style={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                {lesson.type === 'club' && <span>🎯</span>}
-                                                {lesson.subject}
-                                            </div>
-                                            <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
-                                                {lesson.type === 'substitution' && 'Замена: '}
-                                                {lesson.type === 'club' && 'Кружок: '}
-                                                {lesson.details.split('•')[0]} {/* Extract teacher name */}
-                                            </div>
-                                        </div>
+                            return (
+                                <div key={cls} style={{ marginBottom: '12px' }}>
+                                    {/* Class header */}
+                                    <button
+                                        onClick={() => toggleClass(cls)}
+                                        style={{
+                                            width: '100%', display: 'flex', alignItems: 'center', gap: '8px',
+                                            padding: '6px 10px', border: 'none', borderRadius: '6px',
+                                            background: '#f1f5f9', cursor: 'pointer', textAlign: 'left'
+                                        }}
+                                    >
+                                        {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                                        <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#1e293b' }}>{cls}</span>
+                                        <span style={{
+                                            fontSize: '0.7rem', padding: '1px 8px', borderRadius: '10px',
+                                            background: '#e2e8f0', color: '#475569', fontWeight: 600
+                                        }}>
+                                            {classLessons.length}
+                                        </span>
+                                    </button>
 
-                                        {/* Column 3: Grade */}
-                                        <div style={{ textAlign: 'center', fontSize: '0.9rem', fontWeight: '500', color: '#444' }}>
-                                            {lesson.grade}
-                                        </div>
-                                    </div>
+                                    {/* Lessons */}
+                                    {isExpanded && (
+                                        <div style={{ padding: '4px 0 0 8px' }}>
+                                            {classLessons.map(lesson => {
+                                                const startTime = lesson.startTime || (lesson.time || '').split('-')[0] || '';
+                                                const endTime = lesson.endTime || (lesson.time || '').split('-')[1] || '';
+                                                const isSub = lesson.type === 'substitution';
+                                                const isClub = lesson.type === 'club';
 
-                                    {/* Actions Row */}
-                                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', borderTop: '1px dashed #eee', paddingTop: '0.5rem' }}>
-                                        {lesson.type !== 'substitution' && (
-                                            <>
-                                                <button
-                                                    className="btn btn-secondary"
-                                                    style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
-                                                    onClick={() => {
-                                                        onClose();
-                                                        onAddSubstitution(lesson.teacherId, lesson.lessonNumber, lesson.subject, lesson.grade, lesson.startTime, lesson.endTime);
-                                                    }}
-                                                    title="Назначить замену"
-                                                >
-                                                    <UserX size={14} style={{ marginRight: '4px' }} />
-                                                    Заменить
-                                                </button>
-                                                <button
-                                                    className="btn btn-secondary"
-                                                    style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', color: '#ef4444', borderColor: '#fee2e2' }}
-                                                    onClick={() => handleDelete(lesson.id)}
-                                                    title="Удалить урок"
-                                                >
-                                                    <Trash2 size={14} />
-                                                </button>
-                                            </>
-                                        )}
-                                        {lesson.type === 'substitution' && (
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                <span style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 'bold' }}>ЗАМЕНА</span>
-                                                <button
-                                                    className="btn btn-secondary"
-                                                    style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', color: '#ef4444' }}
-                                                    onClick={() => handleDelete(lesson.id)}
-                                                    title="Удалить замену"
-                                                >
-                                                    <Trash2 size={14} />
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
+                                                let rowBg = 'white';
+                                                if (isSub) rowBg = '#fef2f2';
+                                                if (isClub) rowBg = '#faf5ff';
+
+                                                return (
+                                                    <div key={lesson.id} style={{
+                                                        display: 'flex', alignItems: 'center', gap: '10px',
+                                                        padding: '6px 10px', borderBottom: '1px solid #f1f5f9',
+                                                        background: rowBg, borderRadius: '4px', marginBottom: '2px'
+                                                    }}>
+                                                        {/* Time */}
+                                                        <div style={{
+                                                            width: '85px', flexShrink: 0,
+                                                            fontWeight: 600, fontSize: '0.82rem',
+                                                            color: startTime ? '#1e293b' : '#94a3b8',
+                                                            fontVariantNumeric: 'tabular-nums'
+                                                        }}>
+                                                            {startTime && endTime
+                                                                ? `${startTime} - ${endTime}`
+                                                                : '--:--'}
+                                                        </div>
+
+                                                        {/* Subject */}
+                                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                                            <div style={{
+                                                                fontWeight: 600, fontSize: '0.85rem',
+                                                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                                                            }}>
+                                                                {isSub && <span style={{ color: '#dc2626', marginRight: '4px' }}>ЗАМЕНА</span>}
+                                                                {lesson.subject}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Teacher */}
+                                                        <div style={{
+                                                            fontSize: '0.8rem', color: '#475569', fontWeight: 500,
+                                                            flexShrink: 0, maxWidth: '140px',
+                                                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                                                        }}>
+                                                            {lesson.teacher || ''}
+                                                        </div>
+
+                                                        {/* Actions */}
+                                                        <div style={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
+                                                            {!isSub && (
+                                                                <button
+                                                                    className="icon-btn"
+                                                                    style={{ width: '28px', height: '28px' }}
+                                                                    onClick={() => {
+                                                                        onClose();
+                                                                        onAddSubstitution(
+                                                                            lesson.teacherId, lesson.lessonNumber,
+                                                                            lesson.subject, lesson.className,
+                                                                            startTime, endTime
+                                                                        );
+                                                                    }}
+                                                                    title="Назначить замену"
+                                                                >
+                                                                    <UserX size={14} />
+                                                                </button>
+                                                            )}
+                                                            <button
+                                                                className="icon-btn"
+                                                                style={{ width: '28px', height: '28px', color: '#ef4444' }}
+                                                                onClick={() => handleDelete(lesson.id)}
+                                                                title="Удалить"
+                                                            >
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
-                            ))}
-                        </div>
+                            );
+                        })
                     )}
                 </div>
 
-                <div style={{ display: 'flex', gap: '0.75rem', borderTop: '1px solid var(--color-border)', paddingTop: '1rem', flexWrap: 'wrap' }}>
+                {/* Footer actions */}
+                <div style={{
+                    display: 'flex', gap: '8px', padding: '1rem 1.5rem',
+                    borderTop: '1px solid var(--color-border)', flexWrap: 'wrap'
+                }}>
                     <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => { onClose(); onAddLesson(); }}>
-                        <Plus size={18} />
-                        Добавить урок
+                        <Plus size={16} /> Урок
                     </button>
                     <button
                         className="btn"
-                        style={{
-                            flex: 1,
-                            backgroundColor: '#8b5cf6',
-                            color: 'white',
-                            borderColor: '#8b5cf6'
-                        }}
+                        style={{ flex: 1, backgroundColor: '#8b5cf6', color: 'white', borderColor: '#8b5cf6' }}
                         onClick={() => { onClose(); onAddClub && onAddClub(); }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#7c3aed'}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#8b5cf6'}
                     >
-                        <Users size={18} />
-                        Добавить кружок
-                    </button>
-                    <button
-                        className="btn btn-secondary"
-                        style={{ flex: 1, opacity: 0.5, cursor: 'not-allowed' }}
-                        disabled={true}
-                        title="Для замены выберите конкретный урок из списка выше"
-                    >
-                        <UserX size={18} />
-                        Назначить замену
+                        <Users size={16} /> Кружок
                     </button>
                 </div>
-
             </div>
         </div>
     );

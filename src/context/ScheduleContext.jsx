@@ -241,6 +241,7 @@ export const ScheduleProvider = ({ children }) => {
                     const dateStr = currentDate.toISOString().split('T')[0];
 
                     lessons.forEach(lesson => {
+                        const [st, et] = (lesson.time || '').split('-');
                         events.push({
                             id: eventId++,
                             type: 'lesson',
@@ -249,7 +250,9 @@ export const ScheduleProvider = ({ children }) => {
                             subject: lesson.subject,
                             teacher: lesson.teacher || 'Не назначен',
                             time: lesson.time,
-                            details: `${className} - ${lesson.subject}${lesson.teacher ? ` (${lesson.teacher})` : ''}`
+                            startTime: st || '',
+                            endTime: et || '',
+                            details: `${className} - ${lesson.subject}`
                         });
                     });
 
@@ -263,23 +266,24 @@ export const ScheduleProvider = ({ children }) => {
 
     // 2. Teachers List (with migration for rates)
     const [teachers, setTeachers] = useState(() => {
-        const saved = localStorage.getItem('school_calendar_teachers_v2');
+        const saved = localStorage.getItem('school_calendar_teachers_v3');
         if (saved) {
             try {
                 let savedTeachers = JSON.parse(saved);
 
-                // Migrate: merge rates from mock data into saved teachers
+                // Migrate: merge rates from mock data into saved teachers (by name)
                 savedTeachers = savedTeachers.map(t => {
-                    const mockTeacher = MOCK_DATA_TEACHERS.find(m => m.id === t.id);
-                    if (mockTeacher && mockTeacher.rates && !t.rates) {
-                        return { ...t, rates: mockTeacher.rates };
+                    const mockTeacher = MOCK_DATA_TEACHERS.find(m => m.name === t.name);
+                    if (mockTeacher) {
+                        // Merge new data, preserve user customizations (rates, etc.)
+                        return { ...mockTeacher, ...t, id: mockTeacher.id };
                     }
                     return t;
                 });
 
                 // Add any new teachers from mock data that don't exist in saved
-                const savedIds = new Set(savedTeachers.map(t => t.id));
-                const newTeachers = MOCK_DATA_TEACHERS.filter(m => !savedIds.has(m.id));
+                const savedNames = new Set(savedTeachers.map(t => t.name));
+                const newTeachers = MOCK_DATA_TEACHERS.filter(m => !savedNames.has(m.name));
                 if (newTeachers.length > 0) {
                     savedTeachers = [...savedTeachers, ...newTeachers];
                 }
@@ -289,6 +293,8 @@ export const ScheduleProvider = ({ children }) => {
                 console.error('Failed to parse teachers data', e);
             }
         }
+        // Clear old version
+        localStorage.removeItem('school_calendar_teachers_v2');
         return MOCK_DATA_TEACHERS;
     });
 
@@ -298,7 +304,7 @@ export const ScheduleProvider = ({ children }) => {
     }, [userEvents]);
 
     useEffect(() => {
-        localStorage.setItem('school_calendar_teachers_v2', JSON.stringify(teachers));
+        localStorage.setItem('school_calendar_teachers_v3', JSON.stringify(teachers));
     }, [teachers]);
 
     useEffect(() => {
@@ -381,6 +387,22 @@ export const ScheduleProvider = ({ children }) => {
                     // Применяем пользовательские данные если есть
                     const customData = customSlotData[currentSlotId] || {};
 
+                    // Auto-assign rateId based on subject for teachers with multiple rates
+                    let autoRateId = null;
+                    if (teacherId) {
+                        const teacher = MOCK_DATA_TEACHERS.find(t => t.id === teacherId);
+                        if (teacher && teacher.rates && teacher.rates.length > 0) {
+                            const subjectLower = (lesson.subject || '').toLowerCase();
+                            if (subjectLower.includes('сонастройка')) {
+                                const sonaRate = teacher.rates.find(r => r.name.toLowerCase().includes('сонастройка'));
+                                autoRateId = sonaRate ? sonaRate.id : teacher.rates[0].id;
+                            } else {
+                                const classRate = teacher.rates.find(r => r.name.toLowerCase().includes('класс'));
+                                autoRateId = classRate ? classRate.id : teacher.rates[0].id;
+                            }
+                        }
+                    }
+
                     slots.push({
                         id: currentSlotId,
                         date: dateStr,
@@ -392,6 +414,7 @@ export const ScheduleProvider = ({ children }) => {
                         grade: className,
                         lessonNumber: lessonIndex + 1,
                         type: 'regular',
+                        rateId: autoRateId,
                         ...customData
                     });
                 });

@@ -1,163 +1,92 @@
 import React, { useMemo } from 'react';
-import { isSameMonth, isToday, format } from 'date-fns';
+import { isSameMonth, isToday, format, isWeekend, getDay } from 'date-fns';
 import { getCalendarDays, formatWeekDay } from '../../utils/dateUtils';
-import { ru } from 'date-fns/locale';
 
 const CalendarGrid = ({ currentDate, onDayClick, substitutions = [] }) => {
     const days = useMemo(() => getCalendarDays(currentDate), [currentDate]);
-
-    // Week days header (Mon-Sun)
-    // Take first 7 days of the generated interval which starts on Monday
     const weekDays = days.slice(0, 7);
 
     return (
-        <div className="calendar-grid" style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(7, 1fr)',
-            gap: '1px',
-            backgroundColor: '#ddd', // Grid lines color
-            border: '1px solid #ddd'
-        }}>
+        <div className="cal-grid">
             {/* Weekday Headers */}
-            {weekDays.map((day) => (
-                <div key={day.toString()} style={{
-                    backgroundColor: '#f9fafb',
-                    padding: '0.5rem',
-                    textAlign: 'center',
-                    fontWeight: 'bold',
-                    fontSize: '0.875rem'
-                }}>
-                    {formatWeekDay(day)}
-                </div>
-            ))}
+            {weekDays.map((day) => {
+                const dayNum = getDay(day);
+                const isWE = dayNum === 0 || dayNum === 6;
+                return (
+                    <div key={day.toString()} className={`cal-weekday ${isWE ? 'cal-weekday--weekend' : ''}`}>
+                        {formatWeekDay(day)}
+                    </div>
+                );
+            })}
 
             {/* Days */}
             {days.map((day) => {
                 const isCurrentMonth = isSameMonth(day, currentDate);
                 const isDayToday = isToday(day);
+                const isWE = isWeekend(day);
                 const dateKey = format(day, 'yyyy-MM-dd');
-                // Filter events for this day
-                const dayEvents = substitutions.filter(s => s.date === dateKey); // 'substitutions' prop is passed as 'events' from parent
+                const dayEvents = substitutions.filter(s => s.date === dateKey);
+
+                const lessonCount = dayEvents.filter(e => e.type === 'lesson').length;
+                const subCount = dayEvents.filter(e => e.type === 'substitution').length;
+                const clubCount = dayEvents.filter(e => e.type === 'club').length;
+
+                let cellClass = 'cal-day';
+                if (!isCurrentMonth) cellClass += ' cal-day--other';
+                if (isDayToday) cellClass += ' cal-day--today';
+                if (isWE) cellClass += ' cal-day--weekend';
 
                 return (
                     <div
                         key={day.toString()}
+                        className={cellClass}
                         onClick={() => onDayClick && onDayClick(day)}
-                        style={{
-                            backgroundColor: 'white',
-                            minHeight: '120px',
-                            padding: '0.5rem',
-                            opacity: isCurrentMonth ? 1 : 0.5,
-                            position: 'relative',
-                            backgroundColor: isDayToday ? '#eff6ff' : 'white',
-                            cursor: 'pointer',
-                            transition: 'background-color 0.2s',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '4px'
-                        }}
-                        onMouseEnter={(e) => {
-                            if (!isDayToday) e.currentTarget.style.backgroundColor = '#f3f4f6';
-                        }}
-                        onMouseLeave={(e) => {
-                            if (!isDayToday) e.currentTarget.style.backgroundColor = 'white';
-                        }}
                     >
-                        <div style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            marginBottom: '0.25rem'
-                        }}>
-                            <span style={{
-                                fontWeight: isDayToday ? 'bold' : 'normal',
-                                color: isDayToday ? '#2563eb' : 'inherit',
-                                backgroundColor: isDayToday ? '#dbeafe' : 'transparent',
-                                borderRadius: '50%',
-                                width: '1.5rem',
-                                height: '1.5rem',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '0.875rem'
-                            }}>
+                        <div className="cal-day-header">
+                            <span className={`cal-day-num ${isDayToday ? 'cal-day-num--today' : ''}`}>
                                 {format(day, 'd')}
                             </span>
+                            {isCurrentMonth && dayEvents.length > 0 && (
+                                <div className="cal-day-badges">
+                                    {lessonCount > 0 && (
+                                        <span className="cal-badge cal-badge--lesson">{lessonCount}</span>
+                                    )}
+                                    {subCount > 0 && (
+                                        <span className="cal-badge cal-badge--sub">{subCount}</span>
+                                    )}
+                                    {clubCount > 0 && (
+                                        <span className="cal-badge cal-badge--club">{clubCount}</span>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', overflow: 'hidden', flex: 1 }}>
-                            {dayEvents.slice(0, 3).map(event => {
-                                // Определяем стиль в зависимости от типа события
-                                const isSubstitution = event.type === 'substitution';
-                                const isLesson = event.type === 'lesson';
-                                const isClub = event.type === 'club';
-
-                                let bgColor = '#dbeafe';
-                                let textColor = '#1e40af';
-                                let borderColor = '#93c5fd';
-                                let icon = '📖';
-
-                                if (isSubstitution) {
-                                    bgColor = '#fef2f2';
-                                    textColor = '#991b1b';
-                                    borderColor = '#fecaca';
-                                    icon = '🔄';
-                                } else if (isLesson) {
-                                    bgColor = '#f0fdf4';
-                                    textColor = '#15803d';
-                                    borderColor = '#bbf7d0';
-                                    icon = '✓';
-                                } else if (isClub) {
-                                    bgColor = '#faf5ff';
-                                    textColor = '#6b21a8';
-                                    borderColor = '#e9d5ff';
-                                    icon = '🎯';
+                        <div className="cal-day-events">
+                            {dayEvents.slice(0, 4).map(event => {
+                                let typeClass = 'cal-event--lesson';
+                                if (event.type === 'substitution') {
+                                    typeClass = 'cal-event--sub';
+                                } else if (event.type === 'club') {
+                                    typeClass = 'cal-event--club';
                                 }
 
                                 return (
-                                    <div key={event.id} style={{
-                                        fontSize: '0.7rem',
-                                        backgroundColor: bgColor,
-                                        color: textColor,
-                                        padding: '3px 6px',
-                                        borderRadius: '4px',
-                                        borderLeft: `3px solid ${borderColor}`,
-                                        whiteSpace: 'nowrap',
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '4px',
-                                        transition: 'transform 0.1s'
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        e.currentTarget.style.transform = 'scale(1.02)';
-                                        e.currentTarget.style.zIndex = '10';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.transform = 'scale(1)';
-                                        e.currentTarget.style.zIndex = '1';
-                                    }}
-                                    title={`${event.subject || ''}\n${event.startTime ? `${event.startTime} - ${event.endTime}` : ''}\n${event.details || ''}`}
+                                    <div
+                                        key={event.id}
+                                        className={`cal-event ${typeClass}`}
+                                        title={[event.subject, event.time, event.teacher, event.className].filter(Boolean).join('\n')}
                                     >
-                                        <span style={{ fontSize: '0.65rem' }}>{icon}</span>
-                                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                            {event.startTime && <span style={{ fontWeight: 'bold', marginRight: '4px' }}>{event.startTime}</span>}
-                                            {event.subject || event.details}
+                                        {event.startTime && <span className="cal-event-time">{event.startTime}</span>}
+                                        <span className="cal-event-text">
+                                            {event.className && <strong>{event.className}</strong>}
+                                            {' '}{event.subject || event.details}
                                         </span>
                                     </div>
                                 );
                             })}
-                            {dayEvents.length > 3 && (
-                                <div style={{
-                                    fontSize: '0.7rem',
-                                    color: '#64748b',
-                                    textAlign: 'center',
-                                    padding: '2px',
-                                    backgroundColor: '#f1f5f9',
-                                    borderRadius: '3px',
-                                    fontWeight: '500'
-                                }}>
-                                    +{dayEvents.length - 3} еще
+                            {dayEvents.length > 4 && (
+                                <div className="cal-event-more">
+                                    +{dayEvents.length - 4}
                                 </div>
                             )}
                         </div>

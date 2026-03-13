@@ -4,6 +4,7 @@ import Layout from './components/Layout'
 import CalendarPage from './pages/CalendarPage'
 import TeachersPage from './pages/TeachersPage'
 import StatsPage from './pages/StatsPage'
+import ScheduleOptimizationPage from './pages/ScheduleOptimizationPage'
 import './App.css'
 
 function App() {
@@ -16,6 +17,7 @@ function App() {
             <Route path="/substitutions" element={<CalendarPage />} />
             <Route path="/teachers" element={<TeachersPage />} />
             <Route path="/stats" element={<StatsPage />} />
+            <Route path="/optimization" element={<ScheduleOptimizationPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

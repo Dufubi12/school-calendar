@@ -1,5 +1,5 @@
 import { Outlet, Link } from 'react-router-dom';
-import { Calendar, Users, BarChart3 } from 'lucide-react';
+import { Calendar, Users, BarChart3, Wrench } from 'lucide-react';
 
 const Layout = () => {
     return (
@@ -24,6 +24,9 @@ const Layout = () => {
                     </Link>
                     <Link to="/stats" style={{ textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                         <BarChart3 size={18} /> Статистика
+                    </Link>
+                    <Link to="/optimization" style={{ textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                        <Wrench size={18} /> Оптимизация
                     </Link>
                 </nav>
             </header>

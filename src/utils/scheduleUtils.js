@@ -233,22 +233,86 @@ export const getSlotsByDate = (date, allSlots) => {
 
 /**
  * Calculate teacher salary based on lessons
+ * Supports both single lessonRate and multiple rates per teacher.
+ * When teacher has rates[], each time slot's rateId determines its rate.
  * @param {number} teacherId - Teacher ID
  * @param {Array} timeSlots - All time slots
- * @param {number} lessonRate - Rate per lesson in rubles
+ * @param {number} lessonRate - Rate per lesson in rubles (legacy single rate)
  * @param {Date} startDate - Start date for calculation (optional)
  * @param {Date} endDate - End date for calculation (optional)
+ * @param {Array} rates - Array of {id, name, rate} for multiple rate types
  * @returns {Object} Salary information
  */
-export const calculateTeacherSalary = (teacherId, timeSlots, lessonRate, startDate = null, endDate = null) => {
+export const calculateTeacherSalary = (teacherId, timeSlots, lessonRate, startDate = null, endDate = null, rates = []) => {
     const workload = calculateWorkload(teacherId, timeSlots, startDate, endDate);
 
+    // If teacher has multiple rates, calculate breakdown
+    if (rates && rates.length > 0) {
+        const teacherSlots = timeSlots.filter(slot => slot.teacherId === teacherId);
+
+        // Filter by date range
+        let filteredSlots = teacherSlots;
+        if (startDate || endDate) {
+            filteredSlots = teacherSlots.filter(slot => {
+                if (!slot.date) return slot.isRecurring;
+                const slotDate = new Date(slot.date);
+                if (startDate && slotDate < startDate) return false;
+                if (endDate && slotDate > endDate) return false;
+                return true;
+            });
+        }
+
+        // Group slots by rateId
+        const breakdown = rates.map(r => {
+            const slotsForRate = filteredSlots.filter(s => s.rateId === r.id);
+            return {
+                rateId: r.id,
+                rateName: r.name,
+                rateAmount: r.rate,
+                slotCount: slotsForRate.length,
+                subtotal: slotsForRate.length * r.rate
+            };
+        });
+
+        // Slots without a rateId assigned (use first rate as default)
+        const unassignedSlots = filteredSlots.filter(s => !s.rateId || !rates.find(r => r.id === s.rateId));
+        if (unassignedSlots.length > 0) {
+            breakdown.push({
+                rateId: null,
+                rateName: 'Без типа ставки',
+                rateAmount: rates[0].rate,
+                slotCount: unassignedSlots.length,
+                subtotal: unassignedSlots.length * rates[0].rate
+            });
+        }
+
+        const totalSalary = breakdown.reduce((sum, b) => sum + b.subtotal, 0);
+
+        return {
+            teacherId,
+            totalLessons: workload.totalSlots,
+            lessonRate: null,
+            hasMultipleRates: true,
+            rates,
+            breakdown,
+            monthlySalary: totalSalary,
+            weeklyLessons: Math.round(workload.averagePerDay * 5 * 10) / 10,
+            weeklySalary: Math.round(totalSalary / Math.max(workload.totalSlots, 1) * workload.averagePerDay * 5),
+            lessonsByDay: workload.slotsByDay,
+            averagePerDay: workload.averagePerDay,
+            period: startDate && endDate ? { startDate, endDate } : null
+        };
+    }
+
+    // Legacy single rate
     return {
         teacherId,
         totalLessons: workload.totalSlots,
         lessonRate,
+        hasMultipleRates: false,
+        breakdown: [],
         monthlySalary: workload.totalSlots * lessonRate,
-        weeklyLessons: Math.round(workload.averagePerDay * 5 * 10) / 10, // Round to 1 decimal
+        weeklyLessons: Math.round(workload.averagePerDay * 5 * 10) / 10,
         weeklySalary: Math.round(workload.averagePerDay * 5 * lessonRate),
         lessonsByDay: workload.slotsByDay,
         averagePerDay: workload.averagePerDay,

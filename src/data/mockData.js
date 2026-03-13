@@ -65,6 +65,17 @@ export const TEACHERS = [
     { id: 6, name: 'Попов Дмитрий Олегович', subject: 'Физкультура', grades: ['Начальная школа (1-4)', 'Средняя школа (5-9)', 'Старшая школа (10-11)'], lessonRate: 800 },
     { id: 7, name: 'Васильева Ольга Николаевна', subject: 'Математика', grades: ['Средняя школа (5-9)'], lessonRate: 1000 }, // Potential sub for Ivanova
     { id: 8, name: 'Морозов Игорь Сергеевич', subject: 'Английский язык', grades: ['Средняя школа (5-9)', 'Старшая школа (10-11)'], lessonRate: 1150 },
+    {
+        id: 9,
+        name: 'Козлова Галина',
+        subject: 'Математика',
+        grades: ['Начальная школа (1-4)', 'Средняя школа (5-9)'],
+        lessonRate: 0,
+        rates: [
+            { id: 'rate-1', name: 'Классы', rate: 700 },
+            { id: 'rate-2', name: 'Сонастройка', rate: 160 }
+        ]
+    },
 ];
 
 // Mock Schedule:

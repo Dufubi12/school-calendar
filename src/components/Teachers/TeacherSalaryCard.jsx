@@ -5,7 +5,8 @@ const TeacherSalaryCard = ({ teacherId }) => {
     const { getTeacherSalaryInfo, teachers } = useSchedule();
 
     const teacher = teachers.find(t => t.id === teacherId);
-    if (!teacher || !teacher.lessonRate) return null;
+    const hasRates = teacher && teacher.rates && teacher.rates.length > 0;
+    if (!teacher || (!teacher.lessonRate && !hasRates)) return null;
 
     const salaryInfo = getTeacherSalaryInfo(teacherId);
     if (!salaryInfo) return null;
@@ -34,7 +35,7 @@ const TeacherSalaryCard = ({ teacherId }) => {
                     letterSpacing: '0.05em',
                     marginBottom: '0.25rem'
                 }}>
-                    Месячная зарплата
+                    Общая зарплата
                 </div>
                 <div style={{
                     fontSize: '1.5rem',
@@ -77,7 +78,18 @@ const TeacherSalaryCard = ({ teacherId }) => {
                 fontSize: '0.75rem',
                 color: 'var(--color-text-muted)'
             }}>
-                Ставка: {formatCurrency(salaryInfo.lessonRate)}/урок • Всего уроков: {salaryInfo.totalLessons}
+                {salaryInfo.hasMultipleRates ? (
+                    <div>
+                        {salaryInfo.rates.map(r => (
+                            <span key={r.id} style={{ marginRight: '0.75rem' }}>
+                                {r.name}: {formatCurrency(r.rate)}
+                            </span>
+                        ))}
+                        • Всего уроков: {salaryInfo.totalLessons}
+                    </div>
+                ) : (
+                    <>Ставка: {formatCurrency(salaryInfo.lessonRate)}/урок • Всего уроков: {salaryInfo.totalLessons}</>
+                )}
             </div>
         </div>
     );

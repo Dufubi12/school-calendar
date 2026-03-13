@@ -11,6 +11,7 @@ const SlotEditModal = ({ slot, isOpen, onClose, onSave }) => {
     const [subject, setSubject] = useState('');
     const [grade, setGrade] = useState('');
     const [teacherId, setTeacherId] = useState('');
+    const [rateId, setRateId] = useState('');
     const [room, setRoom] = useState('');
     const [lessonNumber, setLessonNumber] = useState(1);
 
@@ -22,10 +23,15 @@ const SlotEditModal = ({ slot, isOpen, onClose, onSave }) => {
             setSubject(slot.subject || '');
             setGrade(slot.grade || '');
             setTeacherId(slot.teacherId || '');
+            setRateId(slot.rateId || '');
             setRoom(slot.room || '');
             setLessonNumber(slot.lessonNumber || 1);
         }
     }, [slot, isOpen]);
+
+    // Получить ставки выбранного учителя
+    const selectedTeacher = teacherId ? teachers.find(t => t.id === parseInt(teacherId)) : null;
+    const teacherRates = selectedTeacher?.rates || [];
 
     const handleSave = () => {
         // Минимальная валидация (только обязательные поля)
@@ -47,6 +53,7 @@ const SlotEditModal = ({ slot, isOpen, onClose, onSave }) => {
             subject,
             grade,
             teacherId: teacherId ? parseInt(teacherId) : null,
+            rateId: rateId || null,
             room,
             lessonNumber: parseInt(lessonNumber)
         };
@@ -202,7 +209,10 @@ const SlotEditModal = ({ slot, isOpen, onClose, onSave }) => {
                         <select
                             className="input-field"
                             value={teacherId}
-                            onChange={(e) => setTeacherId(e.target.value)}
+                            onChange={(e) => {
+                                setTeacherId(e.target.value);
+                                setRateId(''); // Сбросить ставку при смене учителя
+                            }}
                         >
                             <option value="">Не назначен</option>
                             {teachers.map(teacher => (
@@ -212,6 +222,34 @@ const SlotEditModal = ({ slot, isOpen, onClose, onSave }) => {
                             ))}
                         </select>
                     </div>
+
+                    {/* Тип ставки (если у учителя несколько ставок) */}
+                    {teacherRates.length > 0 && (
+                        <div>
+                            <label className="label">Тип ставки</label>
+                            <select
+                                className="input-field"
+                                value={rateId}
+                                onChange={(e) => setRateId(e.target.value)}
+                                style={{
+                                    borderColor: !rateId ? '#f59e0b' : undefined,
+                                    backgroundColor: !rateId ? '#fffbeb' : undefined
+                                }}
+                            >
+                                <option value="">Выберите тип ставки</option>
+                                {teacherRates.map(r => (
+                                    <option key={r.id} value={r.id}>
+                                        {r.name} — {r.rate} ₽
+                                    </option>
+                                ))}
+                            </select>
+                            {!rateId && (
+                                <div style={{ fontSize: '0.75rem', color: '#d97706', marginTop: '0.25rem' }}>
+                                    Рекомендуется выбрать тип ставки для корректного расчёта зарплаты
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* Аудитория */}
                     <div>

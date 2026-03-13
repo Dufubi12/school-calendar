@@ -6,15 +6,21 @@ import './TeacherAssignment.css';
 const TeacherAssignmentModal = ({ isOpen, onClose, slot, onAssign }) => {
     const { teachers, getAvailableTeachersForSlot, getTeacherWorkload } = useSchedule();
     const [selectedTeacherId, setSelectedTeacherId] = useState(slot?.teacherId || null);
+    const [selectedRateId, setSelectedRateId] = useState(slot?.rateId || '');
     const [subjectFilter, setSubjectFilter] = useState(slot?.subject || '');
     const [searchQuery, setSearchQuery] = useState('');
 
     useEffect(() => {
         if (slot) {
             setSelectedTeacherId(slot.teacherId);
+            setSelectedRateId(slot.rateId || '');
             setSubjectFilter(slot.subject || '');
         }
     }, [slot]);
+
+    // Ставки выбранного учителя
+    const selectedTeacher = selectedTeacherId ? teachers.find(t => t.id === selectedTeacherId) : null;
+    const selectedTeacherRates = selectedTeacher?.rates || [];
 
     if (!isOpen || !slot) return null;
 
@@ -36,7 +42,7 @@ const TeacherAssignmentModal = ({ isOpen, onClose, slot, onAssign }) => {
     const handleAssign = () => {
         if (selectedTeacherId) {
             const teacher = teachers.find(t => t.id === selectedTeacherId);
-            onAssign(slot.id, selectedTeacherId, teacher?.subject);
+            onAssign(slot.id, selectedTeacherId, teacher?.subject, selectedRateId || null);
             onClose();
         }
     };
@@ -159,6 +165,48 @@ const TeacherAssignmentModal = ({ isOpen, onClose, slot, onAssign }) => {
                             sortedTeachers.map(teacher => renderTeacherCard(teacher))
                         )}
                     </div>
+
+                    {/* Выбор типа ставки (если у выбранного учителя несколько ставок) */}
+                    {selectedTeacherRates.length > 0 && (
+                        <div style={{
+                            marginTop: '1rem',
+                            padding: '1rem',
+                            backgroundColor: '#f5f3ff',
+                            borderRadius: '8px',
+                            border: '1px solid #e9d5ff'
+                        }}>
+                            <label style={{
+                                display: 'block',
+                                fontSize: '0.875rem',
+                                fontWeight: '600',
+                                color: '#5b21b6',
+                                marginBottom: '0.5rem'
+                            }}>
+                                Тип ставки для этого слота:
+                            </label>
+                            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                {selectedTeacherRates.map(r => (
+                                    <button
+                                        key={r.id}
+                                        onClick={() => setSelectedRateId(r.id)}
+                                        style={{
+                                            padding: '0.5rem 1rem',
+                                            borderRadius: '8px',
+                                            border: selectedRateId === r.id ? '2px solid #7c3aed' : '1px solid #d8b4fe',
+                                            backgroundColor: selectedRateId === r.id ? '#ede9fe' : '#fff',
+                                            color: selectedRateId === r.id ? '#5b21b6' : '#6b7280',
+                                            fontWeight: selectedRateId === r.id ? '600' : '400',
+                                            cursor: 'pointer',
+                                            fontSize: '0.875rem',
+                                            transition: 'all 0.15s'
+                                        }}
+                                    >
+                                        {r.name} — {r.rate} ₽
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <div className="modal-footer">

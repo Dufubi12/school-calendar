@@ -32,7 +32,8 @@ const TeacherSalaryModal = ({ teacher, isOpen, onClose, onEdit }) => {
         calculationEndDate = endDate ? new Date(endDate) : null;
     }
 
-    const salaryInfo = teacher.lessonRate
+    const hasRates = teacher.rates && teacher.rates.length > 0;
+    const salaryInfo = (teacher.lessonRate || hasRates)
         ? getTeacherSalaryInfo(teacher.id, calculationStartDate, calculationEndDate)
         : null;
     const workload = getTeacherWorkload(teacher.id, calculationStartDate, calculationEndDate);
@@ -235,69 +236,180 @@ const TeacherSalaryModal = ({ teacher, isOpen, onClose, onEdit }) => {
                 {/* Информация о зарплате */}
                 {salaryInfo ? (
                     <>
-                        {/* Ставка и общая сумма */}
-                        <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(2, 1fr)',
-                            gap: '1rem',
-                            marginBottom: '1.5rem'
-                        }}>
-                            {/* Ставка за урок */}
-                            <div style={{
-                                padding: '1.25rem',
-                                backgroundColor: '#f5f3ff',
-                                borderRadius: '12px',
-                                border: '2px solid #e9d5ff'
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                                    <TrendingUp size={20} color="#7c3aed" />
-                                    <span style={{ fontSize: '0.875rem', color: '#5b21b6', fontWeight: '600' }}>
-                                        Ставка за урок
-                                    </span>
+                        {/* Для множественных ставок — разбивка */}
+                        {salaryInfo.hasMultipleRates ? (
+                            <>
+                                {/* Общая сумма */}
+                                <div style={{
+                                    padding: '1.25rem',
+                                    backgroundColor: '#ecfdf5',
+                                    borderRadius: '12px',
+                                    border: '2px solid #6ee7b7',
+                                    marginBottom: '1rem'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                        <DollarSign size={20} color="#059669" />
+                                        <span style={{ fontSize: '0.875rem', color: '#065f46', fontWeight: '600' }}>
+                                            Общая сумма
+                                        </span>
+                                    </div>
+                                    <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#065f46' }}>
+                                        {formatCurrency(salaryInfo.monthlySalary)}
+                                    </div>
+                                    <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.25rem' }}>
+                                        {formatCurrency(salaryInfo.weeklySalary)} в неделю
+                                    </div>
                                 </div>
-                                <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#5b21b6' }}>
-                                    {formatCurrency(salaryInfo.lessonRate)}
-                                </div>
-                            </div>
 
-                            {/* Общая сумма */}
-                            <div style={{
-                                padding: '1.25rem',
-                                backgroundColor: '#ecfdf5',
-                                borderRadius: '12px',
-                                border: '2px solid #6ee7b7'
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                                    <DollarSign size={20} color="#059669" />
-                                    <span style={{ fontSize: '0.875rem', color: '#065f46', fontWeight: '600' }}>
-                                        Общая сумма
-                                    </span>
+                                {/* Разбивка по ставкам */}
+                                <div style={{ marginBottom: '1.5rem' }}>
+                                    <h3 style={{ fontSize: '1rem', marginBottom: '0.75rem', color: '#1e293b' }}>
+                                        Разбивка по ставкам
+                                    </h3>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                        {salaryInfo.breakdown.map((item, idx) => (
+                                            <div key={idx} style={{
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                padding: '0.75rem 1rem',
+                                                backgroundColor: item.slotCount > 0 ? '#f0fdf4' : '#f8fafc',
+                                                borderRadius: '8px',
+                                                border: item.slotCount > 0 ? '1px solid #bbf7d0' : '1px solid #e2e8f0'
+                                            }}>
+                                                <div>
+                                                    <div style={{ fontWeight: '600', fontSize: '0.9rem', color: '#1e293b' }}>
+                                                        {item.rateName}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                                        {item.slotCount} уроков × {formatCurrency(item.rateAmount)}
+                                                    </div>
+                                                </div>
+                                                <div style={{
+                                                    fontWeight: 'bold',
+                                                    fontSize: '1.1rem',
+                                                    color: item.slotCount > 0 ? '#166534' : '#94a3b8'
+                                                }}>
+                                                    {formatCurrency(item.subtotal)}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
-                                <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#065f46' }}>
-                                    {formatCurrency(salaryInfo.monthlySalary)}
-                                </div>
-                                <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.25rem' }}>
-                                    {formatCurrency(salaryInfo.weeklySalary)} в неделю
-                                </div>
-                            </div>
-                        </div>
 
-                        {/* Формула расчета */}
-                        <div style={{
-                            padding: '1rem',
-                            backgroundColor: '#f1f5f9',
-                            borderRadius: '8px',
-                            marginBottom: '1.5rem',
-                            fontSize: '0.875rem',
-                            color: '#475569'
-                        }}>
-                            <strong>Расчет:</strong> {workload.totalSlots} уроков × {formatCurrency(salaryInfo.lessonRate)} = {formatCurrency(salaryInfo.monthlySalary)}
-                            {periodType === 'all' && (
-                                <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#94a3b8' }}>
-                                    (за все время работы)
+                                {/* Формула расчета */}
+                                <div style={{
+                                    padding: '1rem',
+                                    backgroundColor: '#f1f5f9',
+                                    borderRadius: '8px',
+                                    marginBottom: '1.5rem',
+                                    fontSize: '0.875rem',
+                                    color: '#475569'
+                                }}>
+                                    <strong>Расчет:</strong>{' '}
+                                    {salaryInfo.breakdown
+                                        .filter(b => b.slotCount > 0)
+                                        .map(b => `${b.slotCount} × ${formatCurrency(b.rateAmount)} (${b.rateName})`)
+                                        .join(' + ')
+                                    } = {formatCurrency(salaryInfo.monthlySalary)}
+                                    {periodType === 'all' && (
+                                        <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#94a3b8' }}>
+                                            (за все время работы)
+                                        </div>
+                                    )}
                                 </div>
-                            )}
-                        </div>
+
+                                {/* Список ставок */}
+                                <div style={{
+                                    padding: '0.75rem 1rem',
+                                    backgroundColor: '#f5f3ff',
+                                    borderRadius: '8px',
+                                    marginBottom: '1.5rem'
+                                }}>
+                                    <div style={{ fontSize: '0.75rem', color: '#5b21b6', fontWeight: '600', marginBottom: '0.5rem' }}>
+                                        Ставки учителя:
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                                        {salaryInfo.rates.map(r => (
+                                            <span key={r.id} style={{
+                                                fontSize: '0.85rem',
+                                                backgroundColor: '#ede9fe',
+                                                color: '#5b21b6',
+                                                padding: '4px 10px',
+                                                borderRadius: '12px',
+                                                fontWeight: '500'
+                                            }}>
+                                                {r.name}: {formatCurrency(r.rate)}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                {/* Ставка и общая сумма (единая ставка) */}
+                                <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(2, 1fr)',
+                                    gap: '1rem',
+                                    marginBottom: '1.5rem'
+                                }}>
+                                    <div style={{
+                                        padding: '1.25rem',
+                                        backgroundColor: '#f5f3ff',
+                                        borderRadius: '12px',
+                                        border: '2px solid #e9d5ff'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                            <TrendingUp size={20} color="#7c3aed" />
+                                            <span style={{ fontSize: '0.875rem', color: '#5b21b6', fontWeight: '600' }}>
+                                                Ставка за урок
+                                            </span>
+                                        </div>
+                                        <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#5b21b6' }}>
+                                            {formatCurrency(salaryInfo.lessonRate)}
+                                        </div>
+                                    </div>
+
+                                    <div style={{
+                                        padding: '1.25rem',
+                                        backgroundColor: '#ecfdf5',
+                                        borderRadius: '12px',
+                                        border: '2px solid #6ee7b7'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                            <DollarSign size={20} color="#059669" />
+                                            <span style={{ fontSize: '0.875rem', color: '#065f46', fontWeight: '600' }}>
+                                                Общая сумма
+                                            </span>
+                                        </div>
+                                        <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#065f46' }}>
+                                            {formatCurrency(salaryInfo.monthlySalary)}
+                                        </div>
+                                        <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.25rem' }}>
+                                            {formatCurrency(salaryInfo.weeklySalary)} в неделю
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Формула расчета */}
+                                <div style={{
+                                    padding: '1rem',
+                                    backgroundColor: '#f1f5f9',
+                                    borderRadius: '8px',
+                                    marginBottom: '1.5rem',
+                                    fontSize: '0.875rem',
+                                    color: '#475569'
+                                }}>
+                                    <strong>Расчет:</strong> {workload.totalSlots} уроков × {formatCurrency(salaryInfo.lessonRate)} = {formatCurrency(salaryInfo.monthlySalary)}
+                                    {periodType === 'all' && (
+                                        <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#94a3b8' }}>
+                                            (за все время работы)
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        )}
                     </>
                 ) : (
                     <div style={{

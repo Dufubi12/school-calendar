@@ -17,6 +17,7 @@ const TeachersPage = () => {
     const [subject, setSubject] = useState(SUBJECTS[0]);
     const [grades, setGrades] = useState([GRADES[1]]);
     const [lessonRate, setLessonRate] = useState('');
+    const [rates, setRates] = useState([]);
     const [workSchedule, setWorkSchedule] = useState({
         startDate: '',
         endDate: '',
@@ -28,6 +29,7 @@ const TeachersPage = () => {
         setSubject(SUBJECTS[0]);
         setGrades([GRADES[1]]);
         setLessonRate('');
+        setRates([]);
         setWorkSchedule({
             startDate: '',
             endDate: '',
@@ -42,6 +44,7 @@ const TeachersPage = () => {
         setSubject(teacher.subject);
         setGrades(teacher.grades || []);
         setLessonRate(teacher.lessonRate || '');
+        setRates(teacher.rates || []);
         setWorkSchedule(teacher.workSchedule || {
             startDate: '',
             endDate: '',
@@ -63,7 +66,8 @@ const TeachersPage = () => {
             name,
             subject,
             grades,
-            lessonRate: lessonRate ? Number(lessonRate) : 0,
+            lessonRate: rates.length > 0 ? 0 : (lessonRate ? Number(lessonRate) : 0),
+            rates: rates.length > 0 ? rates : [],
             workSchedule
         };
 
@@ -164,6 +168,24 @@ const TeachersPage = () => {
                             ))}
                         </div>
 
+                        {/* Отображение ставок */}
+                        {teacher.rates && teacher.rates.length > 0 && (
+                            <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                {teacher.rates.map(r => (
+                                    <span key={r.id} style={{
+                                        fontSize: '0.75rem',
+                                        backgroundColor: '#f0fdf4',
+                                        color: '#166534',
+                                        padding: '2px 8px',
+                                        borderRadius: '12px',
+                                        border: '1px solid #bbf7d0'
+                                    }}>
+                                        {r.name}: {r.rate} ₽
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+
                         {/* Workload Display */}
                         <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--color-border)' }}>
                             <TeacherWorkloadCard teacherId={teacher.id} showDetails={false} />
@@ -213,25 +235,92 @@ const TeachersPage = () => {
                             />
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                            <div>
-                                <label className="label">Предмет</label>
-                                <select className="input-field" value={subject} onChange={e => setSubject(e.target.value)}>
-                                    {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
+                        <div style={{ marginBottom: '1rem' }}>
+                            <label className="label">Предмет</label>
+                            <select className="input-field" value={subject} onChange={e => setSubject(e.target.value)}>
+                                {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                        </div>
+
+                        {/* Ставки */}
+                        <div style={{ marginBottom: '1rem', borderTop: '1px solid var(--color-border)', paddingTop: '1rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                <label className="label" style={{ margin: 0 }}>Ставки</label>
+                                <button
+                                    className="btn btn-secondary"
+                                    style={{ fontSize: '0.8rem', padding: '4px 10px' }}
+                                    onClick={() => setRates([...rates, { id: `rate-${Date.now()}`, name: '', rate: 0 }])}
+                                >
+                                    <Plus size={14} /> Добавить ставку
+                                </button>
                             </div>
-                            <div>
-                                <label className="label">Ставка за урок (₽)</label>
-                                <input
-                                    className="input-field"
-                                    type="number"
-                                    min="0"
-                                    step="100"
-                                    placeholder="1000"
-                                    value={lessonRate}
-                                    onChange={e => setLessonRate(e.target.value)}
-                                />
-                            </div>
+
+                            {rates.length === 0 && (
+                                <div style={{ marginBottom: '0.75rem' }}>
+                                    <label className="label" style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
+                                        Единая ставка за урок (₽)
+                                    </label>
+                                    <input
+                                        className="input-field"
+                                        type="number"
+                                        min="0"
+                                        step="100"
+                                        placeholder="1000"
+                                        value={lessonRate}
+                                        onChange={e => setLessonRate(e.target.value)}
+                                    />
+                                </div>
+                            )}
+
+                            {rates.map((r, idx) => (
+                                <div key={r.id} style={{
+                                    display: 'flex',
+                                    gap: '0.5rem',
+                                    alignItems: 'center',
+                                    marginBottom: '0.5rem',
+                                    padding: '0.5rem',
+                                    backgroundColor: '#f8fafc',
+                                    borderRadius: '8px',
+                                    border: '1px solid #e2e8f0'
+                                }}>
+                                    <span style={{ fontSize: '0.85rem', fontWeight: '600', minWidth: '20px' }}>{idx + 1}.</span>
+                                    <input
+                                        className="input-field"
+                                        placeholder="Название (напр. Классы)"
+                                        value={r.name}
+                                        onChange={e => setRates(rates.map(item => item.id === r.id ? { ...item, name: e.target.value } : item))}
+                                        style={{ flex: 1 }}
+                                    />
+                                    <input
+                                        className="input-field"
+                                        type="number"
+                                        min="0"
+                                        step="10"
+                                        placeholder="₽"
+                                        value={r.rate || ''}
+                                        onChange={e => setRates(rates.map(item => item.id === r.id ? { ...item, rate: Number(e.target.value) } : item))}
+                                        style={{ width: '100px' }}
+                                    />
+                                    <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>₽</span>
+                                    <button
+                                        onClick={() => setRates(rates.filter(item => item.id !== r.id))}
+                                        style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                </div>
+                            ))}
+
+                            {rates.length > 0 && (
+                                <div style={{
+                                    fontSize: '0.75rem',
+                                    color: '#64748b',
+                                    fontStyle: 'italic',
+                                    marginTop: '0.25rem'
+                                }}>
+                                    При назначении на слот можно будет выбрать тип ставки
+                                </div>
+                            )}
                         </div>
 
                         <div style={{ marginBottom: '1rem' }}>

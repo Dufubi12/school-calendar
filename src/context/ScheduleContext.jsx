@@ -144,10 +144,10 @@ export const ScheduleProvider = ({ children }) => {
         setTimeSlots(prev => prev.map(s => s.id === updatedSlot.id ? updatedSlot : s));
     };
 
-    const assignTeacherToSlot = (slotId, teacherId, subject = null) => {
+    const assignTeacherToSlot = (slotId, teacherId, subject = null, rateId = null) => {
         setTimeSlots(prev => prev.map(slot => {
             if (slot.id === slotId) {
-                return { ...slot, teacherId, subject: subject || slot.subject };
+                return { ...slot, teacherId, subject: subject || slot.subject, rateId };
             }
             return slot;
         }));
@@ -176,8 +176,15 @@ export const ScheduleProvider = ({ children }) => {
 
     const getTeacherSalaryInfo = (teacherId, startDate = null, endDate = null) => {
         const teacher = teachers.find(t => t.id === teacherId);
-        if (!teacher || !teacher.lessonRate) return null;
-        return calculateTeacherSalary(teacherId, timeSlots, teacher.lessonRate, startDate, endDate);
+        if (!teacher) return null;
+        // Support multiple rates or single lessonRate
+        const hasRates = teacher.rates && teacher.rates.length > 0;
+        if (!hasRates && !teacher.lessonRate) return null;
+        return calculateTeacherSalary(
+            teacherId, timeSlots, teacher.lessonRate || 0,
+            startDate, endDate,
+            hasRates ? teacher.rates : []
+        );
     };
 
     return (

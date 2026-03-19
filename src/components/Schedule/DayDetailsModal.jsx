@@ -3,7 +3,7 @@ import { X, Plus, UserX, Trash2, Users } from 'lucide-react';
 import { format } from 'date-fns';
 import { useSchedule } from '../../context/ScheduleContext';
 
-const DayDetailsModal = ({ date, isOpen, onClose, lessons = [], selectedClass = 'all', onAddLesson, onAddSubstitution, onAddClub, onRemoveLesson }) => {
+const DayDetailsModal = ({ date, isOpen, onClose, lessons = [], selectedClass = 'all', selectedTeacher = 'all', onAddLesson, onAddSubstitution, onAddClub, onRemoveLesson }) => {
     const { teachers } = useSchedule();
 
     if (!isOpen) return null;
@@ -26,9 +26,12 @@ const DayDetailsModal = ({ date, isOpen, onClose, lessons = [], selectedClass = 
     };
 
     const allDayLessons = lessons.filter(l => l.date === format(date, 'yyyy-MM-dd'));
-    const dayLessons = selectedClass === 'all'
+    const classFiltered = selectedClass === 'all'
         ? allDayLessons
         : allDayLessons.filter(l => (l.className || l.grade) === selectedClass);
+    const dayLessons = selectedTeacher === 'all'
+        ? classFiltered
+        : classFiltered.filter(l => l.teacher === selectedTeacher || (l.teacherName && l.teacherName === selectedTeacher));
 
     // Normalize lesson data (schedule events vs user events have different fields)
     const normalize = (lesson) => {

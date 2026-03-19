@@ -18,6 +18,7 @@ const CalendarPage = () => {
     const [selectedDate, setSelectedDate] = useState(null);
     const [viewMode, setViewMode] = useState('calendar'); // 'calendar' or 'schedule'
     const [selectedClass, setSelectedClass] = useState('all'); // 'all' or specific class like '7А'
+    const [selectedTeacher, setSelectedTeacher] = useState('all'); // 'all' or teacher last name
 
     // Available classes
     const availableClasses = ['all', '1А', '1Б', '2А', '2Б', '2В', '3А', '3Б', '3В', '4А', '4Б', '4В', '5А', '5Б', '5В', '6А', '6Б', '7А', '7Б', '8А', '9А'];
@@ -35,7 +36,7 @@ const CalendarPage = () => {
     const [isClubModalOpen, setIsClubModalOpen] = useState(false);
 
     // Data State
-    const { events, addEvent, removeEvent, assignTeacherToSlot, bellSchedule, updateBellSchedule } = useSchedule();
+    const { events, addEvent, removeEvent, assignTeacherToSlot, bellSchedule, updateBellSchedule, teachers } = useSchedule();
 
     const handleNextMonth = () => {
         setCurrentDate(nextMonth(currentDate));
@@ -122,6 +123,34 @@ const CalendarPage = () => {
                     </select>
                 </div>
 
+                {/* Teacher Filter */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '16px' }}>
+                    <label htmlFor="teacher-filter" style={{ fontSize: '14px', fontWeight: '500' }}>
+                        👤 Учитель:
+                    </label>
+                    <select
+                        id="teacher-filter"
+                        value={selectedTeacher}
+                        onChange={(e) => setSelectedTeacher(e.target.value)}
+                        style={{
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            border: '2px solid #e5e7eb',
+                            fontSize: '14px',
+                            fontWeight: '500',
+                            cursor: 'pointer',
+                            backgroundColor: selectedTeacher !== 'all' ? '#dbeafe' : '#fff'
+                        }}
+                    >
+                        <option value="all">Все учителя</option>
+                        {teachers.map(t => (
+                            <option key={t.id} value={t.name.split(' ')[0]}>
+                                {t.name}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
                 <button
                     className="btn btn-secondary"
                     onClick={() => setIsBellScheduleEditorOpen(true)}
@@ -149,8 +178,9 @@ const CalendarPage = () => {
                 <CalendarGrid
                     currentDate={currentDate}
                     onDayClick={handleDayClick}
-                    substitutions={events} // Grid will display all events
+                    substitutions={events}
                     selectedClass={selectedClass}
+                    selectedTeacher={selectedTeacher}
                 />
             ) : (
                 <TimeSlotGrid
@@ -167,6 +197,7 @@ const CalendarPage = () => {
                 onClose={() => setIsDetailsOpen(false)}
                 lessons={events}
                 selectedClass={selectedClass}
+                selectedTeacher={selectedTeacher}
                 onAddLesson={() => setIsLessonModalOpen(true)}
                 onAddSubstitution={openSubstitutionModal}
                 onAddClub={() => setIsClubModalOpen(true)}

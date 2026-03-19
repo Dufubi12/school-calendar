@@ -4,7 +4,7 @@ import { getCalendarDays, formatWeekDay } from '../../utils/dateUtils';
 import { useSchedule } from '../../context/ScheduleContext';
 import { ru } from 'date-fns/locale';
 
-const CalendarGrid = ({ currentDate, onDayClick, substitutions = [], selectedClass = 'all' }) => {
+const CalendarGrid = ({ currentDate, onDayClick, substitutions = [], selectedClass = 'all', selectedTeacher = 'all' }) => {
     const { teachers } = useSchedule();
     const days = useMemo(() => getCalendarDays(currentDate), [currentDate]);
 
@@ -47,9 +47,12 @@ const CalendarGrid = ({ currentDate, onDayClick, substitutions = [], selectedCla
                 const dateKey = format(day, 'yyyy-MM-dd');
                 // Filter events for this day (and by class if selected)
                 const allDayEvents = substitutions.filter(s => s.date === dateKey);
-                const dayEvents = selectedClass === 'all'
+                const classFiltered = selectedClass === 'all'
                     ? allDayEvents
                     : allDayEvents.filter(e => (e.className || e.grade) === selectedClass);
+                const dayEvents = selectedTeacher === 'all'
+                    ? classFiltered
+                    : classFiltered.filter(e => e.teacher === selectedTeacher || (e.teacherName && e.teacherName === selectedTeacher));
 
                 return (
                     <div
@@ -96,7 +99,7 @@ const CalendarGrid = ({ currentDate, onDayClick, substitutions = [], selectedCla
                         </div>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', overflow: 'hidden', flex: 1 }}>
-                            {selectedClass !== 'all' ? (
+                            {(selectedClass !== 'all' || selectedTeacher !== 'all') ? (
                                 /* SPECIFIC CLASS MODE: show time + subject + teacher */
                                 <>
                                     {dayEvents.slice(0, 5).map(event => {
@@ -121,7 +124,8 @@ const CalendarGrid = ({ currentDate, onDayClick, substitutions = [], selectedCla
                                                 <span style={{ fontSize: '0.6rem' }}>{icon}</span>
                                                 {time && <span style={{ fontWeight: 'bold', fontSize: '0.65rem' }}>{time}</span>}
                                                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                    {event.subject}{teacher && <span style={{ opacity: 0.7 }}> ({teacher})</span>}
+                                                    {selectedTeacher !== 'all' && (event.className || event.grade) && <span style={{ fontWeight: 'bold' }}>{event.className || event.grade} </span>}
+                                                    {event.subject}{selectedTeacher === 'all' && teacher && <span style={{ opacity: 0.7 }}> ({teacher})</span>}
                                                 </span>
                                             </div>
                                         );

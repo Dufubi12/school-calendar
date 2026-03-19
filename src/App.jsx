@@ -5,6 +5,7 @@ import CalendarPage from './pages/CalendarPage'
 import TeachersPage from './pages/TeachersPage'
 import StatisticsPage from './pages/StatisticsPage'
 import ScheduleOptimizationPage from './pages/ScheduleOptimizationPage'
+import TeacherSchedulePage from './pages/TeacherSchedulePage'
 import './App.css'
 
 function App() {
@@ -18,6 +19,7 @@ function App() {
             <Route path="/teachers" element={<TeachersPage />} />
             <Route path="/statistics" element={<StatisticsPage />} />
             <Route path="/optimization" element={<ScheduleOptimizationPage />} />
+            <Route path="/teacher-schedule" element={<TeacherSchedulePage />} />
           </Route>
         </Routes>
       </BrowserRouter>

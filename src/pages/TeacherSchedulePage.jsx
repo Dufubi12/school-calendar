@@ -9,8 +9,39 @@ const WEEKDAY_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт'];
 const TeacherSchedulePage = () => {
     const { teachers, bellSchedule } = useSchedule();
     const [selectedTeacherId, setSelectedTeacherId] = useState('');
+    const [startDate, setStartDate] = useState(() => {
+        const now = new Date();
+        const monday = new Date(now);
+        const day = monday.getDay();
+        const diff = monday.getDate() - day + (day === 0 ? -6 : 1);
+        monday.setDate(diff);
+        return monday.toISOString().split('T')[0];
+    });
+    const [endDate, setEndDate] = useState(() => {
+        const now = new Date();
+        const friday = new Date(now);
+        const day = friday.getDay();
+        const diff = friday.getDate() - day + (day === 0 ? -6 : 1) + 4;
+        friday.setDate(diff);
+        return friday.toISOString().split('T')[0];
+    });
 
     const selectedTeacher = teachers.find(t => t.id === Number(selectedTeacherId));
+
+    // Получаем ставку учителя из localStorage
+    const teacherRate = useMemo(() => {
+        if (!selectedTeacher) return 500;
+        const saved = localStorage.getItem('school_calendar_teacher_rates');
+        if (saved) {
+            try {
+                const rates = JSON.parse(saved);
+                return rates[selectedTeacher.id] !== undefined ? rates[selectedTeacher.id] : 500;
+            } catch (e) {
+                return 500;
+            }
+        }
+        return 500;
+    }, [selectedTeacher]);
 
     // Строим недельное расписание учителя из REAL_SCHEDULE
     // Структура: { "09:00-09:45": { "Понедельник": [{subject, grade}], ... }, ... }
@@ -78,7 +109,7 @@ const TeacherSchedulePage = () => {
                 </h1>
             </div>
 
-            {/* Выбор учителя */}
+            {/* Выбор учителя и фильтры */}
             <div className="card" style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                 <UserCheck size={20} />
                 <label htmlFor="teacher-select" style={{ fontWeight: 500 }}>
@@ -104,9 +135,45 @@ const TeacherSchedulePage = () => {
                 </select>
 
                 {selectedTeacher && (
-                    <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
-                        Уроков в неделю: <strong>{totalLessons}</strong>
-                    </span>
+                    <>
+                        <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
+                            Уроков в неделю: <strong>{totalLessons}</strong>
+                        </span>
+                        <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
+                            Ставка: <strong>{teacherRate} ₽</strong>
+                        </span>
+                        <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
+                            За неделю: <strong>{(totalLessons * teacherRate).toLocaleString()} ₽</strong>
+                        </span>
+                    </>
+                )}
+
+                {/* Фильтры по дате */}
+                {selectedTeacher && (
+                    <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+                        <label htmlFor="start-date" style={{ fontWeight: 500 }}>С:</label>
+                        <input
+                            id="start-date"
+                            type="date"
+                            value={startDate}
+                            onChange={(e) => setStartDate(e.target.value)}
+                            style={{
+                                padding: '6px 8px', borderRadius: '6px',
+                                border: '1px solid #e5e7eb', fontSize: '0.85rem'
+                            }}
+                        />
+                        <label htmlFor="end-date" style={{ fontWeight: 500 }}>По:</label>
+                        <input
+                            id="end-date"
+                            type="date"
+                            value={endDate}
+                            onChange={(e) => setEndDate(e.target.value)}
+                            style={{
+                                padding: '6px 8px', borderRadius: '6px',
+                                border: '1px solid #e5e7eb', fontSize: '0.85rem'
+                            }}
+                        />
+                    </div>
                 )}
             </div>
 
@@ -154,6 +221,7 @@ const TeacherSchedulePage = () => {
                                     </td>
                                     {WEEKDAYS.map(day => {
                                         const lessons = weeklySchedule[time]?.[day] || [];
+                                        const payment = lessons.length * teacherRate;
                                         return (
                                             <td key={day} style={{
                                                 padding: '8px 12px',
@@ -177,6 +245,18 @@ const TeacherSchedulePage = () => {
                                                         </div>
                                                     </div>
                                                 ))}
+                                                {lessons.length > 0 && (
+                                                    <div style={{
+                                                        fontSize: '0.7rem',
+                                                        color: '#059669',
+                                                        fontWeight: '600',
+                                                        marginTop: '4px',
+                                                        paddingTop: '4px',
+                                                        borderTop: '1px solid #d1fae5'
+                                                    }}>
+                                                        {payment} ₽
+                                                    </div>
+                                                )}
                                             </td>
                                         );
                                     })}

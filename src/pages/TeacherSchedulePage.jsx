@@ -25,6 +25,7 @@ const TeacherSchedulePage = () => {
         friday.setDate(diff);
         return friday.toISOString().split('T')[0];
     });
+    const [selectedTimeSlots, setSelectedTimeSlots] = useState('all'); // 'all' or specific time slot
 
     const selectedTeacher = teachers.find(t => t.id === Number(selectedTeacherId));
 
@@ -76,12 +77,18 @@ const TeacherSchedulePage = () => {
     }, [selectedTeacher]);
 
     // Сортируем временные слоты по порядку из расписания звонков
-    const timeSlots = useMemo(() => {
+    const allTimeSlots = useMemo(() => {
         const bellTimes = bellSchedule.map(b => `${b.startTime}-${b.endTime}`);
         const scheduleTimes = Object.keys(weeklySchedule);
         const allTimes = [...new Set([...bellTimes, ...scheduleTimes])];
         return allTimes.filter(t => scheduleTimes.includes(t));
     }, [weeklySchedule, bellSchedule]);
+
+    // Фильтруем по выбранному времени
+    const timeSlots = useMemo(() => {
+        if (selectedTimeSlots === 'all') return allTimeSlots;
+        return allTimeSlots.filter(t => t === selectedTimeSlots);
+    }, [allTimeSlots, selectedTimeSlots]);
 
     // Получаем лейбл из расписания звонков (например "1 урок")
     const getBellLabel = (timeStr) => {
@@ -148,32 +155,55 @@ const TeacherSchedulePage = () => {
                     </>
                 )}
 
-                {/* Фильтры по дате */}
+                {/* Фильтры по дате и времени */}
                 {selectedTeacher && (
-                    <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
-                        <label htmlFor="start-date" style={{ fontWeight: 500 }}>С:</label>
-                        <input
-                            id="start-date"
-                            type="date"
-                            value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
-                            style={{
-                                padding: '6px 8px', borderRadius: '6px',
-                                border: '1px solid #e5e7eb', fontSize: '0.85rem'
-                            }}
-                        />
-                        <label htmlFor="end-date" style={{ fontWeight: 500 }}>По:</label>
-                        <input
-                            id="end-date"
-                            type="date"
-                            value={endDate}
-                            onChange={(e) => setEndDate(e.target.value)}
-                            style={{
-                                padding: '6px 8px', borderRadius: '6px',
-                                border: '1px solid #e5e7eb', fontSize: '0.85rem'
-                            }}
-                        />
-                    </div>
+                    <>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+                            <label htmlFor="time-filter" style={{ fontWeight: 500 }}>⏰ Урок:</label>
+                            <select
+                                id="time-filter"
+                                value={selectedTimeSlots}
+                                onChange={(e) => setSelectedTimeSlots(e.target.value)}
+                                style={{
+                                    padding: '6px 8px', borderRadius: '6px',
+                                    border: '1px solid #e5e7eb', fontSize: '0.85rem',
+                                    cursor: 'pointer', minWidth: '140px'
+                                }}
+                            >
+                                <option value="all">Все уроки</option>
+                                {allTimeSlots.map(time => (
+                                    <option key={time} value={time}>
+                                        {getBellLabel(time)} ({time})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+                            <label htmlFor="start-date" style={{ fontWeight: 500 }}>С:</label>
+                            <input
+                                id="start-date"
+                                type="date"
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                                style={{
+                                    padding: '6px 8px', borderRadius: '6px',
+                                    border: '1px solid #e5e7eb', fontSize: '0.85rem'
+                                }}
+                            />
+                            <label htmlFor="end-date" style={{ fontWeight: 500 }}>По:</label>
+                            <input
+                                id="end-date"
+                                type="date"
+                                value={endDate}
+                                onChange={(e) => setEndDate(e.target.value)}
+                                style={{
+                                    padding: '6px 8px', borderRadius: '6px',
+                                    border: '1px solid #e5e7eb', fontSize: '0.85rem'
+                                }}
+                            />
+                        </div>
+                    </>
                 )}
             </div>
 

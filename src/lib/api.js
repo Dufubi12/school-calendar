@@ -1,0 +1,293 @@
+import { supabase } from './supabase';
+
+// =====================================================================
+// TEACHER RATES (per-lesson payment)
+// =====================================================================
+export async function loadTeacherRates() {
+    try {
+        const { data, error } = await supabase.from('teacher_rates').select('teacher_id, rate');
+        if (error) {
+            console.error('Failed to load teacher rates:', error);
+            return {};
+        }
+        const map = {};
+        (data || []).forEach(r => { map[r.teacher_id] = r.rate; });
+        return map; // { teacherId: rate }
+    } catch (err) {
+        console.error('loadTeacherRates error:', err);
+        return {};
+    }
+}
+
+export async function saveTeacherRate(teacherId, rate) {
+    const { error } = await supabase
+        .from('teacher_rates')
+        .upsert({ teacher_id: teacherId, rate, updated_at: new Date().toISOString() });
+    if (error) throw error;
+}
+
+// =====================================================================
+// HOMEWORK CHECKS
+// =====================================================================
+export async function loadHomeworkChecks() {
+    try {
+        const { data, error } = await supabase.from('homework_checks').select('teacher_id, check_date, count');
+        if (error) {
+            console.error('Failed to load homework checks:', error);
+            return {};
+        }
+        // Convert flat list to nested: { teacherId: { date: count } }
+        const result = {};
+        (data || []).forEach(row => {
+            const tid = String(row.teacher_id);
+            if (!result[tid]) result[tid] = {};
+            result[tid][row.check_date] = row.count;
+        });
+        return result;
+    } catch (err) {
+        console.error('loadHomeworkChecks error:', err);
+        return {};
+    }
+}
+
+export async function saveHomeworkCheck(teacherId, checkDate, count) {
+    if (!count || count <= 0) {
+        const { error } = await supabase
+            .from('homework_checks')
+            .delete()
+            .eq('teacher_id', teacherId)
+            .eq('check_date', checkDate);
+        if (error) throw error;
+    } else {
+        const { error } = await supabase
+            .from('homework_checks')
+            .upsert({
+                teacher_id: teacherId,
+                check_date: checkDate,
+                count,
+                updated_at: new Date().toISOString()
+            });
+        if (error) throw error;
+    }
+}
+
+// =====================================================================
+// HOMEWORK RATES (per-teacher rate for ДЗ)
+// =====================================================================
+export async function loadHomeworkRates() {
+    try {
+        const { data, error } = await supabase.from('homework_rates').select('teacher_id, rate');
+        if (error) {
+            console.error('Failed to load homework rates:', error);
+            return {};
+        }
+        const map = {};
+        (data || []).forEach(r => { map[r.teacher_id] = r.rate; });
+        return map;
+    } catch (err) {
+        console.error('loadHomeworkRates error:', err);
+        return {};
+    }
+}
+
+export async function saveHomeworkRate(teacherId, rate) {
+    if (!rate || rate <= 0) {
+        const { error } = await supabase.from('homework_rates').delete().eq('teacher_id', teacherId);
+        if (error) throw error;
+    } else {
+        const { error } = await supabase
+            .from('homework_rates')
+            .upsert({ teacher_id: teacherId, rate, updated_at: new Date().toISOString() });
+        if (error) throw error;
+    }
+}
+
+// =====================================================================
+// LESSON TYPES (admin marks each lesson with type)
+// =====================================================================
+export async function loadLessonTypes() {
+    try {
+        const { data, error } = await supabase.from('lesson_types').select('class_name, day_name, time_slot, teacher_last_name, type');
+        if (error) {
+            console.error('Failed to load lesson types:', error);
+            return {};
+        }
+        // Return as { "[class]_[day]_[time]_[teacher]": "type" }
+        const map = {};
+        (data || []).forEach(row => {
+            const key = `${row.class_name}_${row.day_name}_${row.time_slot}_${row.teacher_last_name}`;
+            map[key] = row.type;
+        });
+        return map;
+    } catch (err) {
+        console.error('loadLessonTypes error:', err);
+        return {};
+    }
+}
+
+export async function saveLessonType(className, dayName, timeSlot, teacherLastName, type) {
+    if (!type || type === 'Групповой') {
+        // Default — delete instead of storing
+        const { error } = await supabase
+            .from('lesson_types')
+            .delete()
+            .match({ class_name: className, day_name: dayName, time_slot: timeSlot, teacher_last_name: teacherLastName });
+        if (error) throw error;
+    } else {
+        const { error } = await supabase
+            .from('lesson_types')
+            .upsert({
+                class_name: className,
+                day_name: dayName,
+                time_slot: timeSlot,
+                teacher_last_name: teacherLastName,
+                type,
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'class_name,day_name,time_slot,teacher_last_name' });
+        if (error) throw error;
+    }
+}
+
+// =====================================================================
+// AVAILABILITY (teacher marks free/busy slots)
+// =====================================================================
+export async function loadAvailability() {
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+        const { data, error } = await supabase.from('availability').select('teacher_id, day_name, time_slot, status');
+        clearTimeout(timeoutId);
+
+        if (error) {
+            console.error('Failed to load availability:', error);
+            return {}; // Return empty on error instead of throwing
+        }
+
+        // Return as { teacherId: { dayName: { timeSlot: 'free'|'busy' } } }
+        const result = {};
+        (data || []).forEach(row => {
+            const tid = String(row.teacher_id);
+            if (!result[tid]) result[tid] = {};
+            if (!result[tid][row.day_name]) result[tid][row.day_name] = {};
+            result[tid][row.day_name][row.time_slot] = row.status;
+        });
+        return result;
+    } catch (err) {
+        console.error('loadAvailability error:', err);
+        return {}; // Return empty on timeout or other errors
+    }
+}
+
+export async function saveAvailability(teacherId, dayName, timeSlot, status) {
+    if (!status) {
+        const { error } = await supabase
+            .from('availability')
+            .delete()
+            .match({ teacher_id: teacherId, day_name: dayName, time_slot: timeSlot });
+        if (error) throw error;
+    } else {
+        const { error } = await supabase
+            .from('availability')
+            .upsert({
+                teacher_id: teacherId,
+                day_name: dayName,
+                time_slot: timeSlot,
+                status,
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'teacher_id,day_name,time_slot' });
+        if (error) throw error;
+    }
+}
+
+// =====================================================================
+// INVITATIONS
+// =====================================================================
+export async function loadInvitations() {
+    try {
+        const { data, error } = await supabase
+            .from('invitations')
+            .select('*')
+            .order('created_at', { ascending: false });
+        if (error) {
+            console.error('Failed to load invitations:', error);
+            return [];
+        }
+        // Map snake_case to the shape the UI expects (camelCase-ish)
+        return (data || []).map(row => ({
+            id: row.id,
+            teacherId: row.teacher_id,
+            teacherName: row.teacher_name,
+            date: row.invite_date,
+            time: row.time_slot,
+            subject: row.subject,
+            grade: row.grade,
+            note: row.note,
+            status: row.status,
+            createdAt: row.created_at,
+            respondedAt: row.responded_at,
+        }));
+    } catch (err) {
+        console.error('loadInvitations error:', err);
+        return [];
+    }
+}
+
+export async function createInvitation({ teacherId, teacherName, date, time, subject, grade, note }) {
+    const { data, error } = await supabase
+        .from('invitations')
+        .insert({
+            teacher_id: teacherId,
+            teacher_name: teacherName,
+            invite_date: date,
+            time_slot: time,
+            subject,
+            grade,
+            note: note || null,
+            status: 'pending',
+        })
+        .select()
+        .single();
+    if (error) throw error;
+    return data;
+}
+
+export async function respondToInvitation(id, status) {
+    const { error } = await supabase
+        .from('invitations')
+        .update({ status, responded_at: new Date().toISOString() })
+        .eq('id', id);
+    if (error) throw error;
+}
+
+export async function deleteInvitation(id) {
+    const { error } = await supabase.from('invitations').delete().eq('id', id);
+    if (error) throw error;
+}
+
+// =====================================================================
+// TEACHERS / LESSONS / BELL SCHEDULE — currently still loaded from mockData,
+// but we expose Supabase loaders for future migration.
+// =====================================================================
+export async function loadTeachersFromDb() {
+    const { data, error } = await supabase.from('teachers').select('*').order('id');
+    if (error) throw error;
+    return data || [];
+}
+
+export async function loadLessonsFromDb() {
+    const { data, error } = await supabase.from('lessons').select('*');
+    if (error) throw error;
+    return data || [];
+}
+
+export async function loadBellScheduleFromDb() {
+    const { data, error } = await supabase.from('bell_schedule').select('*').order('lesson_number');
+    if (error) throw error;
+    return (data || []).map(b => ({
+        lessonNumber: b.lesson_number,
+        startTime: b.start_time,
+        endTime: b.end_time,
+        label: b.label,
+    }));
+}

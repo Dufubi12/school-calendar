@@ -260,9 +260,17 @@ export const ScheduleProvider = ({ children }) => {
         return events;
     };
 
-    // 2. Teachers List
+    // 2. Teachers List — versioned cache key. Bump version when MOCK_DATA_TEACHERS changes
+    // structurally (added tutors, changed roles, etc.) to force-refresh user caches.
     const [teachers, setTeachers] = useState(() => {
-        const saved = localStorage.getItem('school_calendar_teachers_v2');
+        // Clean up stale legacy caches so old browsers don't keep outdated teacher lists
+        try {
+            localStorage.removeItem('school_calendar_teachers');
+            localStorage.removeItem('school_calendar_teachers_v2');
+        } catch (e) {
+            // ignore storage errors
+        }
+        const saved = localStorage.getItem('school_calendar_teachers_v3');
         if (saved) {
             try {
                 return JSON.parse(saved);
@@ -270,8 +278,6 @@ export const ScheduleProvider = ({ children }) => {
                 console.error('Failed to parse teachers data', e);
             }
         }
-        // Force import in case module resolution is needed, or just use MOCK from imports
-        // Re-verify imports at top of file
         return MOCK_DATA_TEACHERS;
     });
 
@@ -281,7 +287,7 @@ export const ScheduleProvider = ({ children }) => {
     }, [userEvents]);
 
     useEffect(() => {
-        localStorage.setItem('school_calendar_teachers_v2', JSON.stringify(teachers));
+        localStorage.setItem('school_calendar_teachers_v3', JSON.stringify(teachers));
     }, [teachers]);
 
     useEffect(() => {

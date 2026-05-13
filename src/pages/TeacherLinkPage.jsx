@@ -51,8 +51,8 @@ const TeacherLinkPage = () => {
             justifyContent: 'center',
             padding: '2rem',
             background: `
-                radial-gradient(900px 600px at 10% -10%, rgba(123, 144, 76, 0.18), transparent 60%),
-                radial-gradient(700px 500px at 110% 110%, rgba(39, 59, 9, 0.12), transparent 65%),
+                radial-gradient(900px 600px at 10% -10%, rgba(142, 182, 155, 0.30), transparent 60%),
+                radial-gradient(700px 500px at 110% 110%, rgba(35, 83, 71, 0.18), transparent 65%),
                 var(--color-bg-app)
             `
         }}>

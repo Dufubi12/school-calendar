@@ -54,7 +54,7 @@ const Layout = () => {
                 position: 'sticky',
                 top: 0,
                 zIndex: 50,
-                backgroundColor: 'rgba(247, 249, 241, 0.85)',
+                backgroundColor: 'rgba(242, 247, 243, 0.85)',
                 backdropFilter: 'blur(12px) saturate(140%)',
                 WebkitBackdropFilter: 'blur(12px) saturate(140%)',
                 borderBottom: '1px solid var(--color-border)',

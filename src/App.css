@@ -79,7 +79,7 @@
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background-color: rgba(31, 41, 18, 0.55);
+  background-color: rgba(14, 42, 38, 0.55);
   backdrop-filter: blur(6px) saturate(120%);
   -webkit-backdrop-filter: blur(6px) saturate(120%);
   z-index: 1000;

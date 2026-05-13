@@ -47,8 +47,8 @@ const LoginPage = () => {
             justifyContent: 'center',
             padding: '2rem',
             background: `
-                radial-gradient(900px 600px at 10% -10%, rgba(123, 144, 76, 0.18), transparent 60%),
-                radial-gradient(700px 500px at 110% 110%, rgba(39, 59, 9, 0.12), transparent 65%),
+                radial-gradient(900px 600px at 10% -10%, rgba(142, 182, 155, 0.30), transparent 60%),
+                radial-gradient(700px 500px at 110% 110%, rgba(35, 83, 71, 0.18), transparent 65%),
                 var(--color-bg-app)
             `,
             position: 'relative',
@@ -60,7 +60,7 @@ const LoginPage = () => {
                 top: '-80px', right: '-80px',
                 width: '320px', height: '320px',
                 borderRadius: '50%',
-                background: 'radial-gradient(circle at 30% 30%, rgba(123, 144, 76, 0.22), transparent 70%)',
+                background: 'radial-gradient(circle at 30% 30%, rgba(142, 182, 155, 0.35), transparent 70%)',
                 filter: 'blur(10px)'
             }} />
             <div aria-hidden style={{
@@ -68,7 +68,7 @@ const LoginPage = () => {
                 bottom: '-100px', left: '-60px',
                 width: '280px', height: '280px',
                 borderRadius: '50%',
-                background: 'radial-gradient(circle at 70% 70%, rgba(88, 100, 29, 0.18), transparent 70%)',
+                background: 'radial-gradient(circle at 70% 70%, rgba(35, 83, 71, 0.22), transparent 70%)',
                 filter: 'blur(12px)'
             }} />
 

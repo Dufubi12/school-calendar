@@ -105,22 +105,22 @@ const CalendarPage = () => {
                 </button>
 
                 {/* Class Filter */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '16px' }}>
-                    <label htmlFor="class-filter" style={{ fontSize: '14px', fontWeight: '500' }}>
-                        📚 Класс:
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '12px' }}>
+                    <label htmlFor="class-filter" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-muted)' }}>
+                        📚 Класс
                     </label>
                     <select
                         id="class-filter"
                         value={selectedClass}
                         onChange={(e) => setSelectedClass(e.target.value)}
                         style={{
-                            padding: '8px 12px',
-                            borderRadius: '8px',
-                            border: '2px solid #e5e7eb',
-                            fontSize: '14px',
-                            fontWeight: '500',
+                            padding: '7px 12px',
+                            width: 'auto',
+                            minWidth: '120px',
+                            fontWeight: 500,
                             cursor: 'pointer',
-                            backgroundColor: '#fff'
+                            backgroundColor: selectedClass !== 'all' ? 'var(--color-bg-tint)' : 'var(--color-bg-card)',
+                            borderColor: selectedClass !== 'all' ? 'var(--color-primary)' : 'var(--color-border)'
                         }}
                     >
                         {availableClasses.map(cls => (
@@ -131,62 +131,75 @@ const CalendarPage = () => {
                     </select>
                 </div>
 
-                {/* Role Filter: All / Teachers / Tutors */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '16px' }}>
-                    {[
-                        { id: 'all', label: 'Все' },
-                        { id: 'teachers', label: 'Учителя' },
-                        { id: 'tutors', label: 'Тьюторы' },
-                    ].map(opt => {
-                        const active = roleFilter === opt.id;
-                        return (
-                            <button
-                                key={opt.id}
-                                onClick={() => {
-                                    setRoleFilter(opt.id);
-                                    // Reset teacher selection if it doesn't match new filter
-                                    if (selectedTeacher !== 'all') {
-                                        const t = teachers.find(x => x.name.split(' ')[0] === selectedTeacher);
-                                        if (!t || (opt.id === 'tutors' && !isTutor(t)) || (opt.id === 'teachers' && isTutor(t))) {
-                                            setSelectedTeacher('all');
-                                        }
-                                    }
-                                }}
-                                style={{
-                                    padding: '6px 12px',
-                                    borderRadius: '8px',
-                                    border: '2px solid',
-                                    borderColor: active ? '#3b82f6' : 'transparent',
-                                    backgroundColor: active ? '#eff6ff' : 'transparent',
-                                    color: active ? '#1e40af' : '#6b7280',
-                                    cursor: 'pointer',
-                                    fontSize: '13px',
-                                    fontWeight: 500
-                                }}
-                            >
-                                {opt.label}
-                            </button>
-                        );
-                    })}
-                </div>
-
-                {/* Teacher Filter */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '16px' }}>
-                    <label htmlFor="teacher-filter" style={{ fontSize: '14px', fontWeight: '500' }}>
-                        👤 Учитель:
+                {/* Teacher Filter (label + role tabs + select) */}
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    marginLeft: '12px',
+                    flexWrap: 'wrap'
+                }}>
+                    <label htmlFor="teacher-filter" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-muted)' }}>
+                        👤 Учитель
                     </label>
+
+                    {/* Segmented role toggle */}
+                    <div style={{
+                        display: 'inline-flex',
+                        padding: '3px',
+                        borderRadius: 'var(--radius)',
+                        border: '1px solid var(--color-border)',
+                        backgroundColor: 'var(--color-bg-tint)'
+                    }}>
+                        {[
+                            { id: 'all', label: 'Все' },
+                            { id: 'teachers', label: 'Учителя' },
+                            { id: 'tutors', label: 'Тьюторы' },
+                        ].map(opt => {
+                            const active = roleFilter === opt.id;
+                            return (
+                                <button
+                                    key={opt.id}
+                                    onClick={() => {
+                                        setRoleFilter(opt.id);
+                                        if (selectedTeacher !== 'all') {
+                                            const t = teachers.find(x => x.name.split(' ')[0] === selectedTeacher);
+                                            if (!t || (opt.id === 'tutors' && !isTutor(t)) || (opt.id === 'teachers' && isTutor(t))) {
+                                                setSelectedTeacher('all');
+                                            }
+                                        }
+                                    }}
+                                    style={{
+                                        padding: '5px 12px',
+                                        borderRadius: 'var(--radius-sm)',
+                                        border: 'none',
+                                        backgroundColor: active ? 'var(--color-primary)' : 'transparent',
+                                        color: active ? '#fff' : 'var(--color-text-muted)',
+                                        cursor: 'pointer',
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        transition: 'all var(--duration-fast) var(--ease-out)',
+                                        boxShadow: active ? 'var(--shadow-xs)' : 'none'
+                                    }}
+                                >
+                                    {opt.label}
+                                </button>
+                            );
+                        })}
+                    </div>
+
                     <select
                         id="teacher-filter"
                         value={selectedTeacher}
                         onChange={(e) => setSelectedTeacher(e.target.value)}
                         style={{
-                            padding: '8px 12px',
-                            borderRadius: '8px',
-                            border: '2px solid #e5e7eb',
-                            fontSize: '14px',
-                            fontWeight: '500',
+                            padding: '7px 12px',
+                            width: 'auto',
+                            minWidth: '180px',
+                            fontWeight: 500,
                             cursor: 'pointer',
-                            backgroundColor: selectedTeacher !== 'all' ? '#dbeafe' : '#fff'
+                            backgroundColor: selectedTeacher !== 'all' ? 'var(--color-bg-tint)' : 'var(--color-bg-card)',
+                            borderColor: selectedTeacher !== 'all' ? 'var(--color-primary)' : 'var(--color-border)'
                         }}
                     >
                         <option value="all">

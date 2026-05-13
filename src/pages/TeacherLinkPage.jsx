@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { GraduationCap, LogOut } from 'lucide-react';
+import { GraduationCap, LogOut, Sprout } from 'lucide-react';
 
 const TeacherLinkPage = () => {
     const { signOut, linkTeacher, currentUser } = useAuth();
@@ -49,38 +49,53 @@ const TeacherLinkPage = () => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: '#f8fafc',
-            padding: '2rem'
+            padding: '2rem',
+            background: `
+                radial-gradient(900px 600px at 10% -10%, rgba(123, 144, 76, 0.18), transparent 60%),
+                radial-gradient(700px 500px at 110% 110%, rgba(39, 59, 9, 0.12), transparent 65%),
+                var(--color-bg-app)
+            `
         }}>
             <div style={{
                 width: '100%',
-                maxWidth: '480px',
-                backgroundColor: '#fff',
-                borderRadius: '16px',
-                boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
-                padding: '2.5rem'
+                maxWidth: '500px',
+                backgroundColor: 'var(--color-bg-card)',
+                borderRadius: 'var(--radius-xl)',
+                boxShadow: 'var(--shadow-xl)',
+                padding: '2.5rem',
+                border: '1px solid var(--color-border)',
+                animation: 'modalIn 400ms var(--ease-out)'
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                    <GraduationCap size={28} color="#2563eb" />
-                    <h1 style={{ margin: 0, fontSize: '1.4rem' }}>Выберите себя</h1>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '8px' }}>
+                    <div style={{
+                        width: '48px',
+                        height: '48px',
+                        borderRadius: 'var(--radius-md)',
+                        background: 'linear-gradient(135deg, var(--color-moss) 0%, var(--color-forest) 100%)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: 'var(--shadow-md)'
+                    }}>
+                        <GraduationCap size={26} color="#fff" strokeWidth={2.2} />
+                    </div>
+                    <h1 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--color-primary-deep)', letterSpacing: '-0.01em' }}>
+                        Выберите себя
+                    </h1>
                 </div>
-                <p style={{ margin: '0 0 1rem', color: '#64748b', fontSize: '0.9rem', textAlign: 'center' }}>
-                    Аккаунт <strong>{currentUser?.email}</strong> ещё не привязан к педагогу.
+                <p style={{ margin: '0 0 1.5rem', color: 'var(--color-text-muted)', fontSize: '0.9rem', textAlign: 'center', lineHeight: 1.5 }}>
+                    Аккаунт <strong style={{ color: 'var(--color-text-main)' }}>{currentUser?.email}</strong> ещё не привязан к педагогу.
                     Выберите себя из списка — это нужно сделать только один раз.
                 </p>
 
                 {loading ? (
-                    <p style={{ textAlign: 'center', color: '#64748b' }}>Загрузка…</p>
+                    <p style={{ textAlign: 'center', color: 'var(--color-text-muted)' }}>Загрузка…</p>
                 ) : (
                     <>
                         <select
                             value={selectedId}
                             onChange={(e) => setSelectedId(e.target.value)}
-                            style={{
-                                width: '100%', padding: '12px', borderRadius: '8px',
-                                border: '2px solid #e5e7eb', fontSize: '1rem',
-                                marginBottom: '12px', cursor: 'pointer', backgroundColor: '#fff'
-                            }}
+                            style={{ marginBottom: '12px', cursor: 'pointer', padding: '12px' }}
                         >
                             <option value="">— Выберите педагога —</option>
                             {available.map(t => (
@@ -90,19 +105,27 @@ const TeacherLinkPage = () => {
 
                         {available.length === 0 && (
                             <div style={{
-                                padding: '10px 12px', borderRadius: '8px',
-                                backgroundColor: '#fef3c7', color: '#92400e',
-                                fontSize: '0.85rem', marginBottom: '12px'
+                                padding: '10px 12px',
+                                borderRadius: 'var(--radius)',
+                                backgroundColor: 'var(--color-warning-bg)',
+                                color: 'var(--color-warning)',
+                                border: '1px solid var(--color-warning-border)',
+                                fontSize: '0.85rem',
+                                marginBottom: '12px'
                             }}>
-                                Все педагоги уже привязаны к аккаунтам. Свяжись с методистом.
+                                Все педагоги уже привязаны к аккаунтам. Свяжитесь с методистом.
                             </div>
                         )}
 
                         {error && (
                             <div style={{
-                                padding: '10px 12px', borderRadius: '8px',
-                                backgroundColor: '#fee2e2', color: '#991b1b',
-                                fontSize: '0.85rem', marginBottom: '12px'
+                                padding: '10px 12px',
+                                borderRadius: 'var(--radius)',
+                                backgroundColor: 'var(--color-danger-bg)',
+                                color: 'var(--color-danger)',
+                                border: '1px solid var(--color-danger-border)',
+                                fontSize: '0.85rem',
+                                marginBottom: '12px'
                             }}>
                                 {error}
                             </div>
@@ -111,13 +134,8 @@ const TeacherLinkPage = () => {
                         <button
                             onClick={handleLink}
                             disabled={!selectedId || busy}
-                            style={{
-                                width: '100%', padding: '12px', borderRadius: '10px',
-                                border: 'none',
-                                backgroundColor: (!selectedId || busy) ? '#cbd5e1' : '#2563eb',
-                                color: '#fff', fontSize: '1rem', fontWeight: 600,
-                                cursor: (!selectedId || busy) ? 'not-allowed' : 'pointer'
-                            }}
+                            className="btn btn-primary"
+                            style={{ width: '100%', padding: '12px', fontSize: '0.95rem' }}
                         >
                             {busy ? 'Сохраняем…' : 'Подтвердить'}
                         </button>
@@ -126,13 +144,8 @@ const TeacherLinkPage = () => {
 
                 <button
                     onClick={signOut}
-                    style={{
-                        width: '100%', marginTop: '12px',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                        padding: '8px', borderRadius: '8px',
-                        border: '1px solid #e2e8f0', backgroundColor: '#fff',
-                        color: '#64748b', fontSize: '0.85rem', cursor: 'pointer'
-                    }}
+                    className="btn btn-secondary"
+                    style={{ width: '100%', marginTop: '12px', padding: '10px' }}
                 >
                     <LogOut size={14} /> Выйти
                 </button>

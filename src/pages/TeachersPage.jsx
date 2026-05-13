@@ -1,13 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useSchedule } from '../context/ScheduleContext';
 import { SUBJECTS, GRADES, AVAILABILITY_PRESETS } from '../data/mockData';
 import { Trash2, UserPlus, BookOpen, Pencil, Plus, X } from 'lucide-react';
 import TeacherWorkloadCard from '../components/Teachers/TeacherWorkloadCard';
+import RoleFilterTabs, { filterByRole } from '../components/RoleFilterTabs';
 
 const TeachersPage = () => {
     const { teachers, addTeacher, removeTeacher, updateTeacher } = useSchedule();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingId, setEditingId] = useState(null);
+    const [roleFilter, setRoleFilter] = useState('all');
+
+    const filteredTeachers = useMemo(
+        () => filterByRole(teachers, roleFilter),
+        [teachers, roleFilter]
+    );
 
     // Form State
     const [name, setName] = useState('');
@@ -107,7 +114,7 @@ const TeachersPage = () => {
 
     return (
         <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                 <h1 style={{ margin: 0, fontSize: '1.8rem' }}>Учительский состав</h1>
                 <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
                     <UserPlus size={20} />
@@ -115,8 +122,18 @@ const TeachersPage = () => {
                 </button>
             </div>
 
+            <RoleFilterTabs
+                value={roleFilter}
+                onChange={setRoleFilter}
+                counts={{
+                    all: teachers.length,
+                    teachers: filterByRole(teachers, 'teachers').length,
+                    tutors: filterByRole(teachers, 'tutors').length,
+                }}
+            />
+
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
-                {teachers.map(teacher => (
+                {filteredTeachers.map(teacher => (
                     <div key={teacher.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
                             <h3 style={{ margin: 0, fontSize: '1.2rem' }}>{teacher.name}</h3>

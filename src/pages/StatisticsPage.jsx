@@ -1,9 +1,24 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useSchedule } from '../context/ScheduleContext';
+import { REAL_SCHEDULE } from '../data/mockData';
+import { loadHomeworkChecks, loadHomeworkRates, loadLessonTypes, loadTeacherRates, saveTeacherRate } from '../lib/api';
+import RoleFilterTabs, { filterByRole } from '../components/RoleFilterTabs';
 import './StatisticsPage.css';
+
+const DEFAULT_LESSON_TYPE = 'Групповой';
+const WEEKDAYS_LIST = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница'];
+
+const LESSON_TYPE_COLORS = {
+    'Групповой': { bg: '#dbeafe', text: '#1e40af' },
+    'Индивидуальный': { bg: '#fef3c7', text: '#92400e' },
+    'ОГЭ': { bg: '#ede9fe', text: '#6b21a8' },
+    'ЕГЭ': { bg: '#ffe4e6', text: '#9f1239' },
+    'Тьюторский': { bg: '#d1fae5', text: '#065f46' },
+};
 
 const StatisticsPage = () => {
     const { teachers, getSlotsForDate } = useSchedule();
+    const [roleFilter, setRoleFilter] = useState('all');
 
     // Date range for statistics
     const [startDate, setStartDate] = useState(() => {
@@ -16,40 +31,78 @@ const StatisticsPage = () => {
         return new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
     });
 
-    // Ставки по умолчанию для конкретных педагогов
-    const FORCED_RATES = { 4: 700 }; // Козлова Галина - 700 руб
+    // Async-loaded data from Supabase
+    const [teacherRates, setTeacherRates] = useState({});
+    const [homeworkChecks, setHomeworkChecks] = useState({});
+    const [homeworkRates, setHomeworkRates] = useState({});
+    const [lessonTypes, setLessonTypes] = useState({});
 
-    // Individual payment rates per teacher (stored in localStorage)
-    const [teacherRates, setTeacherRates] = useState(() => {
-        const saved = localStorage.getItem('school_calendar_teacher_rates');
-        if (saved) {
-            try {
-                return { ...JSON.parse(saved), ...FORCED_RATES };
-            } catch (e) {
-                console.error('Failed to parse teacher rates', e);
-            }
-        }
-        return { ...FORCED_RATES };
-    });
+    useEffect(() => {
+        Promise.all([
+            loadTeacherRates().catch(() => ({})),
+            loadHomeworkChecks().catch(() => ({})),
+            loadHomeworkRates().catch(() => ({})),
+            loadLessonTypes().catch(() => ({})),
+        ]).then(([rates, checks, hwRates, types]) => {
+            setTeacherRates(rates);
+            setHomeworkChecks(checks);
+            setHomeworkRates(hwRates);
+            setLessonTypes(types);
+        });
+    }, []);
+
+    // Подсчёт уроков по типам для каждого учителя (на основе недельного расписания)
+    const typesByTeacher = useMemo(() => {
+        const result = {};
+        teachers.forEach(t => {
+            const lastName = t.name.split(' ')[0];
+            const counts = {};
+            Object.entries(REAL_SCHEDULE).forEach(([className, days]) => {
+                Object.entries(days).forEach(([dayName, lessons]) => {
+                    if (!WEEKDAYS_LIST.includes(dayName)) return;
+                    lessons.forEach(lesson => {
+                        if (lesson.teacher !== lastName) return;
+                        const key = `${className}_${dayName}_${lesson.time}_${lesson.teacher}`;
+                        const type = lessonTypes[key] || DEFAULT_LESSON_TYPE;
+                        counts[type] = (counts[type] || 0) + 1;
+                    });
+                });
+            });
+            result[t.id] = counts;
+        });
+        return result;
+    }, [teachers, lessonTypes]);
+
+    // Есть ли вообще размеченные типы (отличные от Групповой)
+    const hasCustomTypes = useMemo(() => {
+        return Object.keys(lessonTypes).length > 0;
+    }, [lessonTypes]);
 
     // Default rate for new teachers or "set all"
     const [defaultRate, setDefaultRate] = useState(500);
 
-    // Save rates to localStorage
-    React.useEffect(() => {
-        localStorage.setItem('school_calendar_teacher_rates', JSON.stringify(teacherRates));
-    }, [teacherRates]);
-
-    // Set rate for specific teacher
+    // Set rate for specific teacher (optimistic + persist)
     const setTeacherRate = (teacherId, rate) => {
-        setTeacherRates(prev => ({ ...prev, [teacherId]: rate }));
+        const prev = teacherRates;
+        setTeacherRates(curr => ({ ...curr, [teacherId]: rate }));
+        saveTeacherRate(teacherId, rate).catch(err => {
+            console.error('Failed to save teacher rate', err);
+            setTeacherRates(prev);
+        });
     };
 
-    // Apply default rate to all teachers
-    const applyDefaultRateToAll = () => {
+    // Apply default rate to all teachers (persist to DB for each)
+    const applyDefaultRateToAll = async () => {
+        const prev = teacherRates;
         const newRates = {};
         teachers.forEach(t => { newRates[t.id] = defaultRate; });
         setTeacherRates(newRates);
+        try {
+            await Promise.all(teachers.map(t => saveTeacherRate(t.id, defaultRate)));
+        } catch (err) {
+            console.error('Failed to apply default rate to all teachers', err);
+            setTeacherRates(prev);
+        }
     };
 
     // Calculate statistics for all teachers
@@ -84,38 +137,58 @@ const StatisticsPage = () => {
             }
 
             const rate = teacherRates[teacher.id] !== undefined ? teacherRates[teacher.id] : defaultRate;
-            const payment = lessonCount * rate;
+            const lessonPayment = lessonCount * rate;
+
+            // Homework checks for this teacher in the date range
+            let hwCount = 0;
+            const tid = String(teacher.id);
+            const teacherHw = homeworkChecks[tid] || {};
+            Object.entries(teacherHw).forEach(([date, count]) => {
+                if (date >= startDate && date <= endDate) hwCount += count;
+            });
+            const hwRate = homeworkRates[tid] !== undefined ? homeworkRates[tid] : 13;
+            const hwPayment = hwCount * hwRate;
 
             stats.push({
                 ...teacher,
                 lessonCount,
                 totalHours: totalHours.toFixed(1),
-                payment,
-                rate
+                payment: lessonPayment + hwPayment,
+                rate,
+                hwCount,
+                hwPayment
             });
         });
 
         // Sort by lesson count descending
         return stats.sort((a, b) => b.lessonCount - a.lessonCount);
-    }, [teachers, startDate, endDate, teacherRates, defaultRate, getSlotsForDate]);
+    }, [teachers, startDate, endDate, teacherRates, defaultRate, getSlotsForDate, homeworkChecks, homeworkRates]);
+
+    // Apply role filter
+    const filteredStats = useMemo(
+        () => filterByRole(teacherStats, roleFilter),
+        [teacherStats, roleFilter]
+    );
 
     // Calculate totals
     const totals = useMemo(() => {
-        return teacherStats.reduce((acc, stat) => ({
+        return filteredStats.reduce((acc, stat) => ({
             lessons: acc.lessons + stat.lessonCount,
             hours: acc.hours + parseFloat(stat.totalHours),
-            payment: acc.payment + stat.payment
-        }), { lessons: 0, hours: 0, payment: 0 });
-    }, [teacherStats]);
+            payment: acc.payment + stat.payment,
+            hwCount: acc.hwCount + (stat.hwCount || 0)
+        }), { lessons: 0, hours: 0, payment: 0, hwCount: 0 });
+    }, [filteredStats]);
 
     // Export to CSV
     const exportToCSV = () => {
-        const headers = ['Учитель', 'Предмет', 'Количество уроков', 'Часов', 'Ставка', 'Зарплата'];
-        const rows = teacherStats.map(stat => [
+        const headers = ['Учитель', 'Предмет', 'Количество уроков', 'Часов', 'Проверка ДЗ', 'Ставка', 'Зарплата'];
+        const rows = filteredStats.map(stat => [
             stat.name,
             stat.subject,
             stat.lessonCount,
             stat.totalHours,
+            stat.hwCount || 0,
             stat.rate,
             stat.payment
         ]);
@@ -183,6 +256,16 @@ const StatisticsPage = () => {
                 </button>
             </div>
 
+            <RoleFilterTabs
+                value={roleFilter}
+                onChange={setRoleFilter}
+                counts={{
+                    all: teacherStats.length,
+                    teachers: filterByRole(teacherStats, 'teachers').length,
+                    tutors: filterByRole(teacherStats, 'tutors').length,
+                }}
+            />
+
             {/* Summary Cards */}
             <div className="summary-cards">
                 <div className="summary-card">
@@ -213,12 +296,14 @@ const StatisticsPage = () => {
                             <th>Классы</th>
                             <th>Уроков</th>
                             <th>Часов</th>
+                            {hasCustomTypes && <th>Типы (нед.)</th>}
+                            <th>ДЗ</th>
                             <th>Ставка (руб)</th>
                             <th>Зарплата</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {teacherStats.map((stat, index) => (
+                        {filteredStats.map((stat, index) => (
                             <tr key={stat.id} className={stat.lessonCount === 0 ? 'no-lessons' : ''}>
                                 <td>{index + 1}</td>
                                 <td className="teacher-name">
@@ -240,6 +325,47 @@ const StatisticsPage = () => {
                                     </strong>
                                 </td>
                                 <td>{stat.totalHours}</td>
+                                {hasCustomTypes && (
+                                    <td>
+                                        {(() => {
+                                            const counts = typesByTeacher[stat.id] || {};
+                                            const entries = Object.entries(counts).filter(([, v]) => v > 0);
+                                            if (entries.length === 0) return <span className="text-muted">—</span>;
+                                            return (
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
+                                                    {entries.map(([type, count]) => {
+                                                        const colors = LESSON_TYPE_COLORS[type] || LESSON_TYPE_COLORS[DEFAULT_LESSON_TYPE];
+                                                        return (
+                                                            <span
+                                                                key={type}
+                                                                title={`${type}: ${count} ур./нед.`}
+                                                                style={{
+                                                                    padding: '2px 6px',
+                                                                    borderRadius: '4px',
+                                                                    fontSize: '0.7rem',
+                                                                    backgroundColor: colors.bg,
+                                                                    color: colors.text,
+                                                                    fontWeight: 500,
+                                                                    whiteSpace: 'nowrap'
+                                                                }}
+                                                            >
+                                                                {type.slice(0, 3)}: {count}
+                                                            </span>
+                                                        );
+                                                    })}
+                                                </div>
+                                            );
+                                        })()}
+                                    </td>
+                                )}
+                                <td>
+                                    {stat.hwCount > 0 ? (
+                                        <span style={{ color: '#7c3aed', fontWeight: 500 }}>
+                                            {stat.hwCount}
+                                            {stat.hwPayment > 0 && <span style={{ fontSize: '0.8rem', color: '#6b7280' }}> ({stat.hwPayment.toLocaleString()} ₽)</span>}
+                                        </span>
+                                    ) : '—'}
+                                </td>
                                 <td>
                                     <input
                                         type="number"
@@ -261,6 +387,8 @@ const StatisticsPage = () => {
                             <td colSpan="4"><strong>ИТОГО:</strong></td>
                             <td><strong>{totals.lessons}</strong></td>
                             <td><strong>{totals.hours.toFixed(1)}</strong></td>
+                            {hasCustomTypes && <td></td>}
+                            <td><strong style={{ color: '#7c3aed' }}>{totals.hwCount || ''}</strong></td>
                             <td></td>
                             <td className="payment-cell">
                                 <strong>{totals.payment.toLocaleString()} ₽</strong>

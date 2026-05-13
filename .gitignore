@@ -25,5 +25,18 @@ dist-ssr
 
 .vercel
 .env*.local
+.env.admin
 
 .vercel
+
+# Credentials and access lists (contain plaintext passwords)
+ДОСТУПЫ_*.md
+ДОСТУПЫ_*.txt
+
+# Local Claude/agent config
+.claude/
+Agents/
+CLAUDE.md
+
+# Large local data files
+*.xlsx

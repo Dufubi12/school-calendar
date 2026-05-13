@@ -139,12 +139,12 @@ const BellScheduleEditor = ({ isOpen, onClose, onSave, currentSchedule }) => {
                 {/* Подсказка */}
                 <div style={{
                     padding: '0.75rem',
-                    backgroundColor: '#eff6ff',
-                    border: '1px solid #bfdbfe',
+                    backgroundColor: 'var(--color-moss-tint)',
+                    border: '1px solid var(--color-sage)',
                     borderRadius: '6px',
                     marginBottom: '1rem',
                     fontSize: '0.875rem',
-                    color: '#1e40af'
+                    color: 'var(--color-primary-deep)'
                 }}>
                     💡 <strong>Настройте расписание звонков:</strong> можете добавлять, удалять уроки и изменять их время.
                     Также можно добавлять кружки после уроков!

@@ -389,8 +389,8 @@ const TeacherAvailabilityPage = () => {
             {!readOnly && selectedTeacher && !editingSlots && (
                 <div style={{
                     marginBottom: '1rem', padding: '10px 14px',
-                    borderRadius: '8px', backgroundColor: '#eff6ff',
-                    border: '1px solid #bfdbfe', color: '#1e40af',
+                    borderRadius: '8px', backgroundColor: 'var(--color-moss-tint)',
+                    border: '1px solid var(--color-sage)', color: 'var(--color-primary-deep)',
                     fontSize: '0.85rem',
                     display: 'flex',
                     alignItems: 'center',
@@ -408,8 +408,8 @@ const TeacherAvailabilityPage = () => {
                             style={{
                                 display: 'flex', alignItems: 'center', gap: '4px',
                                 padding: '6px 12px', borderRadius: '6px',
-                                border: '1px solid #3b82f6', backgroundColor: '#fff',
-                                color: '#3b82f6', cursor: 'pointer', fontSize: '0.8rem',
+                                border: '1px solid var(--color-primary)', backgroundColor: '#fff',
+                                color: 'var(--color-primary)', cursor: 'pointer', fontSize: '0.8rem',
                                 fontWeight: 500
                             }}
                         >

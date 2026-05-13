@@ -132,7 +132,7 @@
 .search-input:focus,
 .subject-filter:focus {
     outline: none;
-    border-color: #3b82f6;
+    border-color: var(--color-primary);
 }
 
 /* Teachers List */
@@ -174,13 +174,13 @@
 }
 
 .teacher-card:hover {
-    border-color: #3b82f6;
+    border-color: var(--color-primary);
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
 }
 
 .teacher-card--selected {
-    border-color: #3b82f6;
-    background: #eff6ff;
+    border-color: var(--color-primary);
+    background: var(--color-moss-tint);
 }
 
 .teacher-card--conflict {
@@ -216,7 +216,7 @@
 .teacher-card__selected-badge {
     width: 28px;
     height: 28px;
-    background: #3b82f6;
+    background: var(--color-primary);
     color: white;
     border-radius: 50%;
     display: flex;
@@ -280,12 +280,12 @@
 }
 
 .btn--primary {
-    background: #3b82f6;
+    background: var(--color-primary);
     color: white;
 }
 
 .btn--primary:hover:not(:disabled) {
-    background: #2563eb;
+    background: var(--color-primary-hover);
 }
 
 .btn--primary:disabled {

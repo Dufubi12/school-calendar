@@ -112,12 +112,19 @@ const TeachersPage = () => {
         resetForm();
     };
 
+    const isTutorTeacher = (t) => t?.subject === 'Тьютор';
+
     return (
-        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <h1 style={{ margin: 0, fontSize: '1.8rem' }}>Учительский состав</h1>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                    <h1 style={{ margin: 0, fontSize: '1.8rem', letterSpacing: '-0.02em' }}>Учительский состав</h1>
+                    <p style={{ margin: '4px 0 0', color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
+                        Всего: <strong style={{ color: 'var(--color-primary-deep)' }}>{teachers.length}</strong> педагогов
+                    </p>
+                </div>
                 <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
-                    <UserPlus size={20} />
+                    <UserPlus size={18} />
                     Добавить учителя
                 </button>
             </div>
@@ -132,54 +139,118 @@ const TeachersPage = () => {
                 }}
             />
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
-                {filteredTeachers.map(teacher => (
-                    <div key={teacher.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                            <h3 style={{ margin: 0, fontSize: '1.2rem' }}>{teacher.name}</h3>
-                            <div style={{ display: 'flex' }}>
-                                <button
-                                    onClick={() => handleEdit(teacher)}
-                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', padding: '4px' }}
-                                    title="Редактировать"
-                                >
-                                    <Pencil size={18} />
-                                </button>
-                                <button
-                                    onClick={() => handleDelete(teacher.id)}
-                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: '4px' }}
-                                    title="Удалить"
-                                >
-                                    <Trash2 size={18} />
-                                </button>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.25rem' }}>
+                {filteredTeachers.map(teacher => {
+                    const tutor = isTutorTeacher(teacher);
+                    return (
+                        <div
+                            key={teacher.id}
+                            className="card teacher-card"
+                            style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '0.6rem',
+                                position: 'relative',
+                                overflow: 'hidden',
+                                padding: '1.25rem'
+                            }}
+                        >
+                            {/* Top accent bar */}
+                            <div style={{
+                                position: 'absolute',
+                                top: 0, left: 0, right: 0,
+                                height: '4px',
+                                background: tutor
+                                    ? 'linear-gradient(90deg, var(--color-sage) 0%, var(--color-moss) 100%)'
+                                    : 'linear-gradient(90deg, var(--color-moss) 0%, var(--color-forest) 100%)'
+                            }} />
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginTop: '4px' }}>
+                                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flex: 1, minWidth: 0 }}>
+                                    {/* Avatar circle */}
+                                    <div style={{
+                                        flexShrink: 0,
+                                        width: '44px', height: '44px',
+                                        borderRadius: '50%',
+                                        background: tutor
+                                            ? 'linear-gradient(135deg, var(--color-sage) 0%, var(--color-moss) 100%)'
+                                            : 'linear-gradient(135deg, var(--color-moss) 0%, var(--color-forest) 100%)',
+                                        color: '#fff',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontSize: '0.95rem',
+                                        fontWeight: 700,
+                                        letterSpacing: '0.02em',
+                                        boxShadow: 'var(--shadow-sm)'
+                                    }}>
+                                        {teacher.name.split(' ').map(n => n[0]).filter(Boolean).slice(0, 2).join('')}
+                                    </div>
+                                    <h3 style={{
+                                        margin: 0,
+                                        fontSize: '1.05rem',
+                                        fontWeight: 700,
+                                        color: 'var(--color-primary-deep)',
+                                        letterSpacing: '-0.01em',
+                                        lineHeight: 1.25,
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis'
+                                    }}>
+                                        {teacher.name}
+                                    </h3>
+                                </div>
+                                <div style={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
+                                    <button
+                                        className="icon-btn"
+                                        onClick={() => handleEdit(teacher)}
+                                        style={{ width: '32px', height: '32px' }}
+                                        title="Редактировать"
+                                    >
+                                        <Pencil size={16} />
+                                    </button>
+                                    <button
+                                        className="icon-btn"
+                                        onClick={() => handleDelete(teacher.id)}
+                                        style={{ width: '32px', height: '32px', color: 'var(--color-danger)' }}
+                                        title="Удалить"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                padding: '4px 10px',
+                                borderRadius: 'var(--radius-pill)',
+                                backgroundColor: tutor ? 'var(--color-moss-tint)' : 'var(--color-bg-tint)',
+                                color: tutor ? 'var(--color-primary)' : 'var(--color-text-muted)',
+                                border: '1px solid var(--color-border)',
+                                fontSize: '0.78rem',
+                                fontWeight: 600,
+                                width: 'fit-content'
+                            }}>
+                                <BookOpen size={13} />
+                                <span>{teacher.subject}</span>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '2px' }}>
+                                {teacher.grades.map(g => (
+                                    <span key={g} className="badge badge-neutral" style={{ fontSize: '0.7rem' }}>
+                                        {g}
+                                    </span>
+                                ))}
+                            </div>
+
+                            {/* Workload Display */}
+                            <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--color-divider)' }}>
+                                <TeacherWorkloadCard teacherId={teacher.id} showDetails={false} />
                             </div>
                         </div>
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-text-muted)' }}>
-                            <BookOpen size={16} />
-                            <span>{teacher.subject}</span>
-                        </div>
-
-                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
-                            {teacher.grades.map(g => (
-                                <span key={g} style={{
-                                    fontSize: '0.75rem',
-                                    backgroundColor: '#f1f5f9',
-                                    padding: '2px 8px',
-                                    borderRadius: '12px',
-                                    border: '1px solid var(--color-border)'
-                                }}>
-                                    {g}
-                                </span>
-                            ))}
-                        </div>
-
-                        {/* Workload Display */}
-                        <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--color-border)' }}>
-                            <TeacherWorkloadCard teacherId={teacher.id} showDetails={false} />
-                        </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
 
             {/* Add Teacher Modal */}

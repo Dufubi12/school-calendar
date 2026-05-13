@@ -255,8 +255,8 @@ const SubstitutionModal = ({ date, isOpen, onClose, onSave, initialData }) => {
                                                 padding: '1rem',
                                                 borderBottom: '1px solid var(--color-border)',
                                                 cursor: 'pointer',
-                                                backgroundColor: isSelected ? '#dbeafe' : (t.isBusy ? '#fef2f2' : '#f0fdf4'),
-                                                borderLeft: isSelected ? '4px solid #3b82f6' : (t.isBusy ? '4px solid #ef4444' : '4px solid #10b981'),
+                                                backgroundColor: isSelected ? 'var(--color-moss-soft)' : (t.isBusy ? '#fef2f2' : '#f0fdf4'),
+                                                borderLeft: isSelected ? '4px solid var(--color-primary)' : (t.isBusy ? '4px solid #ef4444' : '4px solid #10b981'),
                                                 display: 'flex',
                                                 justifyContent: 'space-between',
                                                 alignItems: 'center',
@@ -352,7 +352,7 @@ const SubstitutionModal = ({ date, isOpen, onClose, onSave, initialData }) => {
 
                                             <div style={{ marginLeft: '1rem' }}>
                                                 {isSelected && (
-                                                    <CheckCircle2 size={28} color="#3b82f6" />
+                                                    <CheckCircle2 size={28} color="var(--color-primary)" />
                                                 )}
                                             </div>
                                         </div>

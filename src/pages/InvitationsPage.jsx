@@ -538,7 +538,7 @@ const CreateInvitationModal = ({ teachers, bellSchedule, onClose, onCreate }) =>
                                 padding: '9px 16px',
                                 border: 'none',
                                 borderRadius: '8px',
-                                backgroundColor: '#3b82f6',
+                                backgroundColor: 'var(--color-primary)',
                                 color: '#fff',
                                 fontSize: '0.9rem',
                                 fontWeight: 600,
@@ -691,7 +691,7 @@ const InvitationsPage = () => {
                 marginBottom: '1.5rem'
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <Mail size={28} color="#3b82f6" />
+                    <Mail size={28} color="var(--color-primary)" />
                     <h1 style={{ margin: 0, fontSize: '1.8rem' }}>{headerTitle}</h1>
                 </div>
                 {isAdmin && (
@@ -704,7 +704,7 @@ const InvitationsPage = () => {
                             padding: '10px 18px',
                             border: 'none',
                             borderRadius: '8px',
-                            backgroundColor: '#3b82f6',
+                            backgroundColor: 'var(--color-primary)',
                             color: '#fff',
                             fontSize: '0.9rem',
                             fontWeight: 600,

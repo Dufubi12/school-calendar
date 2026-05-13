@@ -9,7 +9,7 @@ const DEFAULT_LESSON_TYPE = 'Групповой';
 const WEEKDAYS_LIST = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница'];
 
 const LESSON_TYPE_COLORS = {
-    'Групповой': { bg: '#dbeafe', text: '#1e40af' },
+    'Групповой': { bg: 'var(--color-moss-soft)', text: 'var(--color-primary-deep)' },
     'Индивидуальный': { bg: '#fef3c7', text: '#92400e' },
     'ОГЭ': { bg: '#ede9fe', text: '#6b21a8' },
     'ЕГЭ': { bg: '#ffe4e6', text: '#9f1239' },

@@ -39,9 +39,9 @@ const RoleFilterTabs = ({ value, onChange, counts }) => {
                             padding: '8px 14px',
                             borderRadius: '8px',
                             border: '2px solid',
-                            borderColor: isActive ? '#3b82f6' : 'transparent',
-                            backgroundColor: isActive ? '#eff6ff' : 'transparent',
-                            color: isActive ? '#1e40af' : '#6b7280',
+                            borderColor: isActive ? 'var(--color-primary)' : 'transparent',
+                            backgroundColor: isActive ? 'var(--color-moss-tint)' : 'transparent',
+                            color: isActive ? 'var(--color-primary-deep)' : '#6b7280',
                             fontWeight: 500,
                             fontSize: '0.9rem',
                             cursor: 'pointer',
@@ -55,7 +55,7 @@ const RoleFilterTabs = ({ value, onChange, counts }) => {
                                 fontSize: '0.75rem',
                                 padding: '1px 7px',
                                 borderRadius: '10px',
-                                backgroundColor: isActive ? '#3b82f6' : '#e5e7eb',
+                                backgroundColor: isActive ? 'var(--color-primary)' : '#e5e7eb',
                                 color: isActive ? '#fff' : '#6b7280',
                                 fontWeight: 600
                             }}>

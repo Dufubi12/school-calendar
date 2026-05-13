@@ -364,11 +364,11 @@ const HomeworkCheckPage = () => {
                                                         border: '1px solid transparent',
                                                         borderRadius: '4px',
                                                         textAlign: 'center', fontSize: '0.8rem',
-                                                        backgroundColor: val ? '#dbeafe' : 'transparent',
+                                                        backgroundColor: val ? 'var(--color-moss-soft)' : 'transparent',
                                                         outline: 'none'
                                                     }}
                                                     onFocus={(e) => {
-                                                        e.target.style.borderColor = '#3b82f6';
+                                                        e.target.style.borderColor = 'var(--color-primary)';
                                                         e.target.select();
                                                     }}
                                                     onBlur={(e) => { e.target.style.borderColor = 'transparent'; }}

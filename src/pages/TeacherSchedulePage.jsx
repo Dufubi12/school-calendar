@@ -13,7 +13,7 @@ const DEFAULT_LESSON_TYPE = 'Групповой';
 
 // Цветовая схема для типов уроков
 const LESSON_TYPE_COLORS = {
-    'Групповой': { bg: '#dbeafe', text: '#1e40af' },
+    'Групповой': { bg: 'var(--color-moss-soft)', text: 'var(--color-primary-deep)' },
     'Индивидуальный': { bg: '#fef3c7', text: '#92400e' },
     'ОГЭ': { bg: '#ede9fe', text: '#6b21a8' },
     'ЕГЭ': { bg: '#ffe4e6', text: '#9f1239' },
@@ -404,7 +404,7 @@ const TeacherSchedulePage = () => {
                                                     <div key={i} style={{
                                                         padding: '4px 8px',
                                                         borderRadius: '6px',
-                                                        backgroundColor: lessons.length > 1 ? '#dbeafe' : 'transparent',
+                                                        backgroundColor: lessons.length > 1 ? 'var(--color-moss-soft)' : 'transparent',
                                                         marginBottom: i < lessons.length - 1 ? '4px' : 0
                                                     }}>
                                                         <div style={{ fontWeight: 500 }}>{l.subject}</div>

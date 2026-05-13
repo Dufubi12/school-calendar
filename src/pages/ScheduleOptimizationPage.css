@@ -81,8 +81,8 @@
 }
 
 .stat-card--info {
-    border-color: #3b82f6;
-    background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);
+    border-color: var(--color-primary);
+    background: linear-gradient(135deg, var(--color-moss-tint) 0%, #ffffff 100%);
 }
 
 .stat-icon {
@@ -326,7 +326,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #3b82f6;
+    background: var(--color-primary);
     color: white;
     border-radius: 50%;
     font-weight: 600;
@@ -455,7 +455,7 @@
 }
 
 .timeline-item--clickable:hover {
-    background: #eff6ff;
+    background: var(--color-moss-tint);
     border-radius: 8px;
     padding: 4px 8px;
     margin: -4px -8px;
@@ -552,7 +552,7 @@
 }
 
 .swap-current-badge {
-    background: #3b82f6;
+    background: var(--color-primary);
     color: white;
     padding: 8px 16px;
     border-radius: 8px;
@@ -577,7 +577,7 @@
 
 .swap-current-details span {
     padding: 2px 8px;
-    background: #dbeafe;
+    background: var(--color-moss-soft);
     border-radius: 4px;
     font-size: 13px;
 }
@@ -610,8 +610,8 @@
 }
 
 .swap-tab--active {
-    color: #2563eb;
-    border-bottom-color: #2563eb;
+    color: var(--color-primary-hover);
+    border-bottom-color: var(--color-primary-hover);
 }
 
 /* Modal body */
@@ -658,8 +658,8 @@
 }
 
 .swap-teacher-btn:hover:not(:disabled) {
-    border-color: #3b82f6;
-    background: #eff6ff;
+    border-color: var(--color-primary);
+    background: var(--color-moss-tint);
 }
 
 .swap-teacher-btn:disabled {

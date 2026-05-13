@@ -4,7 +4,7 @@ import { getCalendarDays, formatWeekDay } from '../../utils/dateUtils';
 import { useSchedule } from '../../context/ScheduleContext';
 import { ru } from 'date-fns/locale';
 
-const CalendarGrid = ({ currentDate, onDayClick, substitutions = [], selectedClass = 'all', selectedTeacher = 'all' }) => {
+const CalendarGrid = ({ currentDate, onDayClick, substitutions = [], selectedClass = 'all', selectedTeacher = 'all', allowedTeacherLastNames = null }) => {
     const { teachers } = useSchedule();
     const days = useMemo(() => getCalendarDays(currentDate), [currentDate]);
 
@@ -50,9 +50,15 @@ const CalendarGrid = ({ currentDate, onDayClick, substitutions = [], selectedCla
                 const classFiltered = selectedClass === 'all'
                     ? allDayEvents
                     : allDayEvents.filter(e => (e.className || e.grade) === selectedClass);
-                const dayEvents = selectedTeacher === 'all'
+                const teacherFiltered = selectedTeacher === 'all'
                     ? classFiltered
                     : classFiltered.filter(e => e.teacher === selectedTeacher || (e.teacherName && e.teacherName === selectedTeacher));
+                const dayEvents = allowedTeacherLastNames
+                    ? teacherFiltered.filter(e => {
+                        const ln = e.teacher || (e.teacherName ? e.teacherName.split(' ')[0] : null);
+                        return ln && allowedTeacherLastNames.includes(ln);
+                    })
+                    : teacherFiltered;
 
                 return (
                     <div

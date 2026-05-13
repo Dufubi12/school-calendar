@@ -3,7 +3,7 @@ import { X, Plus, UserX, Trash2, Users } from 'lucide-react';
 import { format } from 'date-fns';
 import { useSchedule } from '../../context/ScheduleContext';
 
-const DayDetailsModal = ({ date, isOpen, onClose, lessons = [], selectedClass = 'all', selectedTeacher = 'all', onAddLesson, onAddSubstitution, onAddClub, onRemoveLesson }) => {
+const DayDetailsModal = ({ date, isOpen, onClose, lessons = [], selectedClass = 'all', selectedTeacher = 'all', allowedTeacherLastNames = null, onAddLesson, onAddSubstitution, onAddClub, onRemoveLesson }) => {
     const { teachers } = useSchedule();
 
     if (!isOpen) return null;
@@ -29,9 +29,15 @@ const DayDetailsModal = ({ date, isOpen, onClose, lessons = [], selectedClass = 
     const classFiltered = selectedClass === 'all'
         ? allDayLessons
         : allDayLessons.filter(l => (l.className || l.grade) === selectedClass);
-    const dayLessons = selectedTeacher === 'all'
+    const teacherFiltered = selectedTeacher === 'all'
         ? classFiltered
         : classFiltered.filter(l => l.teacher === selectedTeacher || (l.teacherName && l.teacherName === selectedTeacher));
+    const dayLessons = allowedTeacherLastNames
+        ? teacherFiltered.filter(l => {
+            const ln = l.teacher || (l.teacherName ? l.teacherName.split(' ')[0] : null);
+            return ln && allowedTeacherLastNames.includes(ln);
+        })
+        : teacherFiltered;
 
     // Normalize lesson data (schedule events vs user events have different fields)
     const normalize = (lesson) => {

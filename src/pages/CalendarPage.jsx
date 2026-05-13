@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { nextMonth, prevMonth } from '../utils/dateUtils';
 import CalendarHeader from '../components/Calendar/CalendarHeader';
 import CalendarGrid from '../components/Calendar/CalendarGrid';
@@ -12,6 +12,7 @@ import TeacherAvailabilityPanel from '../components/Teachers/TeacherAvailability
 import BellScheduleEditor from '../components/Schedule/BellScheduleEditor';
 import ClubModal from '../components/Schedule/ClubModal';
 import { useSchedule } from '../context/ScheduleContext';
+import { filterByRole, isTutor } from '../components/RoleFilterTabs';
 
 const CalendarPage = () => {
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -19,6 +20,7 @@ const CalendarPage = () => {
     const [viewMode, setViewMode] = useState('calendar'); // 'calendar' or 'schedule'
     const [selectedClass, setSelectedClass] = useState('all'); // 'all' or specific class like '7А'
     const [selectedTeacher, setSelectedTeacher] = useState('all'); // 'all' or teacher last name
+    const [roleFilter, setRoleFilter] = useState('all'); // 'all' | 'teachers' | 'tutors'
 
     // Available classes
     const availableClasses = ['all', '1А', '1Б', '2А', '2Б', '2В', '3А', '3Б', '3В', '4А', '4Б', '4В', '5А', '5Б', '5В', '6А', '6Б', '7А', '7Б', '8А', '9А'];
@@ -37,6 +39,12 @@ const CalendarPage = () => {
 
     // Data State
     const { events, addEvent, removeEvent, assignTeacherToSlot, bellSchedule, updateBellSchedule, teachers } = useSchedule();
+
+    // Last names of teachers allowed by current role filter (null = no role filter)
+    const allowedTeacherLastNames = useMemo(() => {
+        if (roleFilter === 'all') return null;
+        return filterByRole(teachers, roleFilter).map(t => t.name.split(' ')[0]);
+    }, [teachers, roleFilter]);
 
     const handleNextMonth = () => {
         setCurrentDate(nextMonth(currentDate));
@@ -123,6 +131,45 @@ const CalendarPage = () => {
                     </select>
                 </div>
 
+                {/* Role Filter: All / Teachers / Tutors */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '16px' }}>
+                    {[
+                        { id: 'all', label: 'Все' },
+                        { id: 'teachers', label: 'Учителя' },
+                        { id: 'tutors', label: 'Тьюторы' },
+                    ].map(opt => {
+                        const active = roleFilter === opt.id;
+                        return (
+                            <button
+                                key={opt.id}
+                                onClick={() => {
+                                    setRoleFilter(opt.id);
+                                    // Reset teacher selection if it doesn't match new filter
+                                    if (selectedTeacher !== 'all') {
+                                        const t = teachers.find(x => x.name.split(' ')[0] === selectedTeacher);
+                                        if (!t || (opt.id === 'tutors' && !isTutor(t)) || (opt.id === 'teachers' && isTutor(t))) {
+                                            setSelectedTeacher('all');
+                                        }
+                                    }
+                                }}
+                                style={{
+                                    padding: '6px 12px',
+                                    borderRadius: '8px',
+                                    border: '2px solid',
+                                    borderColor: active ? '#3b82f6' : 'transparent',
+                                    backgroundColor: active ? '#eff6ff' : 'transparent',
+                                    color: active ? '#1e40af' : '#6b7280',
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                    fontWeight: 500
+                                }}
+                            >
+                                {opt.label}
+                            </button>
+                        );
+                    })}
+                </div>
+
                 {/* Teacher Filter */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '16px' }}>
                     <label htmlFor="teacher-filter" style={{ fontSize: '14px', fontWeight: '500' }}>
@@ -142,10 +189,12 @@ const CalendarPage = () => {
                             backgroundColor: selectedTeacher !== 'all' ? '#dbeafe' : '#fff'
                         }}
                     >
-                        <option value="all">Все учителя</option>
-                        {teachers.map(t => (
+                        <option value="all">
+                            {roleFilter === 'tutors' ? 'Все тьюторы' : roleFilter === 'teachers' ? 'Все учителя' : 'Все учителя/тьюторы'}
+                        </option>
+                        {filterByRole(teachers, roleFilter).map(t => (
                             <option key={t.id} value={t.name.split(' ')[0]}>
-                                {t.name}
+                                {t.name}{t.subject ? ` — ${t.subject}` : ''}
                             </option>
                         ))}
                     </select>
@@ -181,6 +230,7 @@ const CalendarPage = () => {
                     substitutions={events}
                     selectedClass={selectedClass}
                     selectedTeacher={selectedTeacher}
+                    allowedTeacherLastNames={allowedTeacherLastNames}
                 />
             ) : (
                 <TimeSlotGrid
@@ -198,6 +248,7 @@ const CalendarPage = () => {
                 lessons={events}
                 selectedClass={selectedClass}
                 selectedTeacher={selectedTeacher}
+                allowedTeacherLastNames={allowedTeacherLastNames}
                 onAddLesson={() => setIsLessonModalOpen(true)}
                 onAddSubstitution={openSubstitutionModal}
                 onAddClub={() => setIsClubModalOpen(true)}

@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Calendar, Users, BarChart3, Wrench, UserCheck, ClipboardCheck, LogOut, CalendarClock, Mail, Tag } from 'lucide-react';
+import { Calendar, Users, BarChart3, Wrench, UserCheck, ClipboardCheck, LogOut, CalendarClock, Mail, Tag, GraduationCap } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const Layout = () => {
@@ -45,6 +45,9 @@ const Layout = () => {
                             <Link to="/availability" style={linkStyle('/availability')}>
                                 <CalendarClock size={16} /> Доступность
                             </Link>
+                            <Link to="/individual-slots" style={linkStyle('/individual-slots')}>
+                                <GraduationCap size={16} /> Инд. занятия
+                            </Link>
                             <Link to="/invitations" style={linkStyle('/invitations')}>
                                 <Mail size={16} /> Приглашения
                             </Link>
@@ -69,6 +72,9 @@ const Layout = () => {
                             </Link>
                             <Link to="/availability" style={linkStyle('/availability')}>
                                 <CalendarClock size={16} /> Мои слоты
+                            </Link>
+                            <Link to="/individual-slots" style={linkStyle('/individual-slots')}>
+                                <GraduationCap size={16} /> Инд. занятия
                             </Link>
                             <Link to="/invitations" style={linkStyle('/invitations')}>
                                 <Mail size={16} /> Приглашения

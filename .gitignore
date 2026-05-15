@@ -40,3 +40,9 @@ CLAUDE.md
 
 # Large local data files
 *.xlsx
+
+# Temp DOCX extraction artifacts
+_temp_*.json
+_temp_*.txt
+_temp_*.xml
+Ставки педагогов.docx

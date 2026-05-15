@@ -3,6 +3,7 @@ import { useSchedule } from '../context/ScheduleContext';
 import { REAL_SCHEDULE } from '../data/mockData';
 import { loadHomeworkChecks, loadHomeworkRates, loadLessonTypes, loadTeacherRates, saveTeacherRate } from '../lib/api';
 import RoleFilterTabs, { filterByRole } from '../components/RoleFilterTabs';
+import { loadStore as loadExtraPayStore, computeForRange } from '../lib/extraPay';
 import './StatisticsPage.css';
 
 const DEFAULT_LESSON_TYPE = 'Групповой';
@@ -36,6 +37,15 @@ const StatisticsPage = () => {
     const [homeworkChecks, setHomeworkChecks] = useState({});
     const [homeworkRates, setHomeworkRates] = useState({});
     const [lessonTypes, setLessonTypes] = useState({});
+    // Extra pay store (localStorage)
+    const [extraPayStore, setExtraPayStore] = useState(() => loadExtraPayStore());
+
+    // Reload extra pay store on window focus so changes from Доп. оплата страница sync
+    useEffect(() => {
+        const reload = () => setExtraPayStore(loadExtraPayStore());
+        window.addEventListener('focus', reload);
+        return () => window.removeEventListener('focus', reload);
+    }, []);
 
     useEffect(() => {
         Promise.all([
@@ -149,20 +159,29 @@ const StatisticsPage = () => {
             const hwRate = homeworkRates[tid] !== undefined ? homeworkRates[tid] : 13;
             const hwPayment = hwCount * hwRate;
 
+            // Extra pay (расписание + методичка) — суммируем по месяцам в выбранном диапазоне
+            const fromPeriod = startDate.slice(0, 7);
+            const toPeriod = endDate.slice(0, 7);
+            const extra = computeForRange(extraPayStore, teacher.id, fromPeriod, toPeriod, teacher.name);
+
             stats.push({
                 ...teacher,
                 lessonCount,
                 totalHours: totalHours.toFixed(1),
-                payment: lessonPayment + hwPayment,
+                payment: lessonPayment + hwPayment + extra.total,
                 rate,
                 hwCount,
-                hwPayment
+                hwPayment,
+                extraPay: extra.total,
+                extraCycles: extra.totalCycles,
+                extraAssembly: extra.totalAssembly,
+                extraHours: extra.totalHours,
             });
         });
 
         // Sort by lesson count descending
         return stats.sort((a, b) => b.lessonCount - a.lessonCount);
-    }, [teachers, startDate, endDate, teacherRates, defaultRate, getSlotsForDate, homeworkChecks, homeworkRates]);
+    }, [teachers, startDate, endDate, teacherRates, defaultRate, getSlotsForDate, homeworkChecks, homeworkRates, extraPayStore]);
 
     // Apply role filter
     const filteredStats = useMemo(
@@ -176,8 +195,9 @@ const StatisticsPage = () => {
             lessons: acc.lessons + stat.lessonCount,
             hours: acc.hours + parseFloat(stat.totalHours),
             payment: acc.payment + stat.payment,
-            hwCount: acc.hwCount + (stat.hwCount || 0)
-        }), { lessons: 0, hours: 0, payment: 0, hwCount: 0 });
+            hwCount: acc.hwCount + (stat.hwCount || 0),
+            extraPay: acc.extraPay + (stat.extraPay || 0),
+        }), { lessons: 0, hours: 0, payment: 0, hwCount: 0, extraPay: 0 });
     }, [filteredStats]);
 
     // Export to CSV
@@ -298,6 +318,7 @@ const StatisticsPage = () => {
                             <th>Часов</th>
                             {hasCustomTypes && <th>Типы (нед.)</th>}
                             <th>ДЗ</th>
+                            <th>Доп. оплата</th>
                             <th>Ставка (руб)</th>
                             <th>Зарплата</th>
                         </tr>
@@ -360,9 +381,19 @@ const StatisticsPage = () => {
                                 )}
                                 <td>
                                     {stat.hwCount > 0 ? (
-                                        <span style={{ color: '#7c3aed', fontWeight: 500 }}>
+                                        <span style={{ color: 'var(--color-info)', fontWeight: 500 }}>
                                             {stat.hwCount}
-                                            {stat.hwPayment > 0 && <span style={{ fontSize: '0.8rem', color: '#6b7280' }}> ({stat.hwPayment.toLocaleString()} ₽)</span>}
+                                            {stat.hwPayment > 0 && <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}> ({stat.hwPayment.toLocaleString()} ₽)</span>}
+                                        </span>
+                                    ) : '—'}
+                                </td>
+                                <td>
+                                    {stat.extraPay > 0 ? (
+                                        <span
+                                            style={{ color: 'var(--color-primary)', fontWeight: 600 }}
+                                            title={`Расписание: ${stat.extraCycles || 0} цикл · Сборка: ${stat.extraAssembly || 0} · Часы: ${stat.extraHours || 0}`}
+                                        >
+                                            {stat.extraPay.toLocaleString()} ₽
                                         </span>
                                     ) : '—'}
                                 </td>
@@ -388,7 +419,8 @@ const StatisticsPage = () => {
                             <td><strong>{totals.lessons}</strong></td>
                             <td><strong>{totals.hours.toFixed(1)}</strong></td>
                             {hasCustomTypes && <td></td>}
-                            <td><strong style={{ color: '#7c3aed' }}>{totals.hwCount || ''}</strong></td>
+                            <td><strong style={{ color: 'var(--color-info)' }}>{totals.hwCount || ''}</strong></td>
+                            <td><strong style={{ color: 'var(--color-primary)' }}>{totals.extraPay > 0 ? `${totals.extraPay.toLocaleString()} ₽` : ''}</strong></td>
                             <td></td>
                             <td className="payment-cell">
                                 <strong>{totals.payment.toLocaleString()} ₽</strong>

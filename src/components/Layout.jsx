@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Calendar, Users, BarChart3, Wrench, UserCheck, ClipboardCheck, LogOut, CalendarClock, Mail, Tag, GraduationCap, Sprout } from 'lucide-react';
+import { Calendar, Users, BarChart3, Wrench, UserCheck, ClipboardCheck, LogOut, CalendarClock, Mail, Tag, GraduationCap, Sprout, Wallet } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const Layout = () => {
@@ -34,6 +34,7 @@ const Layout = () => {
         { to: '/invitations', label: 'Приглашения', icon: Mail },
         { to: '/lesson-types', label: 'Типы уроков', icon: Tag },
         { to: '/homework', label: 'Проверка ДЗ', icon: ClipboardCheck },
+        { to: '/extra-pay', label: 'Доп. оплата', icon: Wallet },
         { to: '/statistics', label: 'Статистика', icon: BarChart3 },
         { to: '/optimization', label: 'Оптимизация', icon: Wrench },
     ];
@@ -44,6 +45,7 @@ const Layout = () => {
         { to: '/individual-slots', label: 'Инд. занятия', icon: GraduationCap },
         { to: '/invitations', label: 'Приглашения', icon: Mail },
         { to: '/homework', label: 'Проверка ДЗ', icon: ClipboardCheck },
+        { to: '/extra-pay', label: 'Доп. оплата', icon: Wallet },
     ];
 
     const links = isAdmin ? adminLinks : teacherLinks;

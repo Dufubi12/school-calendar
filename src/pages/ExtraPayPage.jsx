@@ -58,29 +58,6 @@ const ExtraPayPage = () => {
                 <Header isAdmin={false} />
                 <PeriodPicker period={period} onChange={setPeriod} />
 
-                {scheduleVisible && (
-                    <Section
-                        icon={<BookOpen size={20} />}
-                        title={isNS ? 'Работа с расписанием — Начальная школа' : 'Работа с расписанием — Средняя школа'}
-                        hint={`Ставка: ${result.scheduleRate} ₽ за цикл`}
-                    >
-                        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                            <div>
-                                <label className="label">Количество циклов</label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    step="1"
-                                    value={entry.scheduleCycles || ''}
-                                    onChange={(e) => updateField('scheduleCycles', e.target.value)}
-                                    style={{ width: '120px' }}
-                                />
-                            </div>
-                            <ResultPill label="Сумма" value={`${result.schedulePay.toLocaleString()} ₽`} />
-                        </div>
-                    </Section>
-                )}
-
                 <Section
                     icon={<Wrench size={20} />}
                     title="Методическая работа — сборка урока"
@@ -122,6 +99,29 @@ const ExtraPayPage = () => {
                         <ResultPill label="Сумма" value={`${result.hourlyPay.toLocaleString()} ₽`} />
                     </div>
                 </Section>
+
+                {scheduleVisible && (
+                    <Section
+                        icon={<BookOpen size={20} />}
+                        title={isNS ? 'Работа с расписанием — Начальная школа' : 'Работа с расписанием — Средняя школа'}
+                        hint={`Ставка: ${result.scheduleRate} ₽ за цикл`}
+                    >
+                        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                            <div>
+                                <label className="label">Количество циклов</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    value={entry.scheduleCycles || ''}
+                                    onChange={(e) => updateField('scheduleCycles', e.target.value)}
+                                    style={{ width: '120px' }}
+                                />
+                            </div>
+                            <ResultPill label="Сумма" value={`${result.schedulePay.toLocaleString()} ₽`} />
+                        </div>
+                    </Section>
+                )}
 
                 <TotalCard total={result.total} period={period} />
             </div>
@@ -172,10 +172,10 @@ const ExtraPayPage = () => {
                     <h3 style={{ margin: 0, fontSize: '1rem' }}>Ставки по умолчанию</h3>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
-                    <RateInput label="Расписание НШ (за цикл)" value={store.rates.scheduleNS} onChange={(v) => updateDefaultRate('scheduleNS', v)} />
-                    <RateInput label="Расписание СШ (за цикл)" value={store.rates.scheduleSS} onChange={(v) => updateDefaultRate('scheduleSS', v)} />
                     <RateInput label="Сборка урока (за шт.)" value={store.rates.lessonAssembly} onChange={(v) => updateDefaultRate('lessonAssembly', v)} />
                     <RateInput label="Другое (за час)" value={store.rates.otherHourly} onChange={(v) => updateDefaultRate('otherHourly', v)} />
+                    <RateInput label="Расписание НШ (за цикл)" value={store.rates.scheduleNS} onChange={(v) => updateDefaultRate('scheduleNS', v)} />
+                    <RateInput label="Расписание СШ (за цикл)" value={store.rates.scheduleSS} onChange={(v) => updateDefaultRate('scheduleSS', v)} />
                 </div>
                 <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: '8px', marginBottom: 0 }}>
                     Чтобы установить индивидуальную ставку — впишите её в таблице ниже в колонке «Ставка».
@@ -189,9 +189,9 @@ const ExtraPayPage = () => {
                         <thead style={{ backgroundColor: 'var(--color-bg-tint)' }}>
                             <tr>
                                 <th style={th}>Педагог</th>
-                                <th style={th}>Расписание (циклов)</th>
                                 <th style={th}>Сборка урока (шт.)</th>
                                 <th style={th}>Другое (часов)</th>
+                                <th style={th}>Расписание (циклов)</th>
                                 <th style={{ ...th, textAlign: 'right' }}>Итого</th>
                             </tr>
                         </thead>
@@ -203,17 +203,6 @@ const ExtraPayPage = () => {
                                         <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
                                             {isNS ? 'Методист НШ · 375₽/цикл' : isSS ? 'Методист СШ · 500₽/цикл' : teacher.subject}
                                         </div>
-                                    </td>
-                                    <td style={td}>
-                                        {(isNS || isSS) ? (
-                                            <input
-                                                type="number"
-                                                min="0" step="1"
-                                                value={result.cycles || ''}
-                                                onChange={(e) => updateAdminField(teacher.id, 'scheduleCycles', e.target.value)}
-                                                style={{ width: '80px' }}
-                                            />
-                                        ) : (<span style={{ color: 'var(--color-text-subtle)' }}>—</span>)}
                                     </td>
                                     <td style={td}>
                                         <input
@@ -232,6 +221,17 @@ const ExtraPayPage = () => {
                                             onChange={(e) => updateAdminField(teacher.id, 'otherHours', e.target.value)}
                                             style={{ width: '80px' }}
                                         />
+                                    </td>
+                                    <td style={td}>
+                                        {(isNS || isSS) ? (
+                                            <input
+                                                type="number"
+                                                min="0" step="1"
+                                                value={result.cycles || ''}
+                                                onChange={(e) => updateAdminField(teacher.id, 'scheduleCycles', e.target.value)}
+                                                style={{ width: '80px' }}
+                                            />
+                                        ) : (<span style={{ color: 'var(--color-text-subtle)' }}>—</span>)}
                                     </td>
                                     <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: 'var(--color-success)' }}>
                                         {result.total.toLocaleString()} ₽
@@ -261,9 +261,9 @@ const ExtraPayPage = () => {
                         <thead style={{ backgroundColor: 'var(--color-bg-tint)' }}>
                             <tr>
                                 <th style={th}>Педагог</th>
-                                <th style={th}>Расписание</th>
                                 <th style={th}>Сборка урока</th>
                                 <th style={th}>Другое (час)</th>
+                                <th style={th}>Расписание</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -275,17 +275,6 @@ const ExtraPayPage = () => {
                                 return (
                                     <tr key={t.id} style={{ borderBottom: '1px solid var(--color-divider)' }}>
                                         <td style={td}>{t.name}</td>
-                                        <td style={td}>
-                                            {(isNS || isSS) ? (
-                                                <input
-                                                    type="number" min="0" step="1"
-                                                    placeholder={String(store.rates[isNS ? 'scheduleNS' : 'scheduleSS'])}
-                                                    value={r[isNS ? 'scheduleNS' : 'scheduleSS'] ?? ''}
-                                                    onChange={(e) => updateRate(t.id, isNS ? 'scheduleNS' : 'scheduleSS', e.target.value)}
-                                                    style={{ width: '90px' }}
-                                                />
-                                            ) : (<span style={{ color: 'var(--color-text-subtle)' }}>—</span>)}
-                                        </td>
                                         <td style={td}>
                                             <input
                                                 type="number" min="0" step="1"
@@ -303,6 +292,17 @@ const ExtraPayPage = () => {
                                                 onChange={(e) => updateRate(t.id, 'otherHourly', e.target.value)}
                                                 style={{ width: '90px' }}
                                             />
+                                        </td>
+                                        <td style={td}>
+                                            {(isNS || isSS) ? (
+                                                <input
+                                                    type="number" min="0" step="1"
+                                                    placeholder={String(store.rates[isNS ? 'scheduleNS' : 'scheduleSS'])}
+                                                    value={r[isNS ? 'scheduleNS' : 'scheduleSS'] ?? ''}
+                                                    onChange={(e) => updateRate(t.id, isNS ? 'scheduleNS' : 'scheduleSS', e.target.value)}
+                                                    style={{ width: '90px' }}
+                                                />
+                                            ) : (<span style={{ color: 'var(--color-text-subtle)' }}>—</span>)}
                                         </td>
                                     </tr>
                                 );

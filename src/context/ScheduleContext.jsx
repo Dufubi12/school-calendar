@@ -269,10 +269,11 @@ export const ScheduleProvider = ({ children }) => {
             localStorage.removeItem('school_calendar_teachers_v2');
             localStorage.removeItem('school_calendar_teachers_v3');
             localStorage.removeItem('school_calendar_teachers_v4');
+            localStorage.removeItem('school_calendar_teachers_v5');
         } catch (e) {
             // ignore storage errors
         }
-        const saved = localStorage.getItem('school_calendar_teachers_v5');
+        const saved = localStorage.getItem('school_calendar_teachers_v6');
         if (saved) {
             try {
                 return JSON.parse(saved);
@@ -289,7 +290,7 @@ export const ScheduleProvider = ({ children }) => {
     }, [userEvents]);
 
     useEffect(() => {
-        localStorage.setItem('school_calendar_teachers_v5', JSON.stringify(teachers));
+        localStorage.setItem('school_calendar_teachers_v6', JSON.stringify(teachers));
     }, [teachers]);
 
     useEffect(() => {

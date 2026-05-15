@@ -15,28 +15,49 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
 
     const loadProfile = useCallback(async (userId, userEmail) => {
-        console.log('[Auth] loadProfile called with userId:', userId, 'email:', userEmail);
         if (!userId) {
-            console.log('[Auth] No userId, setting profile to null');
             setProfile(null);
             return null;
         }
 
-        // Temporary: use a default profile based on session
-        // TODO: Fix RLS issue on profiles table and re-enable Supabase fetch
         const email = userEmail || 'user@school.local';
-
-        const defaultProfile = {
+        const fallbackProfile = {
             id: userId,
-            email: email,
+            email,
             role: email === 'admin@school.local' ? 'admin' : 'teacher',
             teacher_id: null,
             full_name: null,
         };
 
-        console.log('[Auth] Using default profile:', defaultProfile);
-        setProfile(defaultProfile);
-        return defaultProfile;
+        // Try fetching the real profile with a 3-second timeout safety net
+        try {
+            const result = await Promise.race([
+                supabase
+                    .from('profiles')
+                    .select('id, email, role, teacher_id, full_name')
+                    .eq('id', userId)
+                    .maybeSingle(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('profile fetch timeout')), 3000))
+            ]);
+
+            const { data, error } = result || {};
+            if (error) {
+                console.warn('[Auth] profiles fetch error, using fallback:', error.message);
+                setProfile(fallbackProfile);
+                return fallbackProfile;
+            }
+            if (data) {
+                setProfile(data);
+                return data;
+            }
+            // No row yet — use fallback
+            setProfile(fallbackProfile);
+            return fallbackProfile;
+        } catch (err) {
+            console.warn('[Auth] profile fetch failed, using fallback:', err?.message);
+            setProfile(fallbackProfile);
+            return fallbackProfile;
+        }
     }, []);
 
     useEffect(() => {

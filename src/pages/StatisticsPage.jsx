@@ -3,7 +3,8 @@ import { useSchedule } from '../context/ScheduleContext';
 import { REAL_SCHEDULE } from '../data/mockData';
 import { loadHomeworkChecks, loadHomeworkRates, loadLessonTypes, loadTeacherRates, saveTeacherRate } from '../lib/api';
 import RoleFilterTabs, { filterByRole } from '../components/RoleFilterTabs';
-import { loadStore as loadExtraPayStore, computeForRange } from '../lib/extraPay';
+import { computeForRange } from '../lib/extraPay';
+import { fetchStore as loadExtraPayStore, DEFAULT_RATES as EP_DEFAULTS } from '../lib/extraPayApi';
 import './StatisticsPage.css';
 
 const DEFAULT_LESSON_TYPE = 'Групповой';
@@ -37,14 +38,22 @@ const StatisticsPage = () => {
     const [homeworkChecks, setHomeworkChecks] = useState({});
     const [homeworkRates, setHomeworkRates] = useState({});
     const [lessonTypes, setLessonTypes] = useState({});
-    // Extra pay store (localStorage)
-    const [extraPayStore, setExtraPayStore] = useState(() => loadExtraPayStore());
+    // Extra pay store (Supabase)
+    const [extraPayStore, setExtraPayStore] = useState({
+        rates: { ...EP_DEFAULTS },
+        ratesPerTeacher: {},
+        entries: {},
+    });
 
-    // Reload extra pay store on window focus so changes from Доп. оплата страница sync
+    // Initial load + reload on window focus to pick up changes from Доп. оплата страница
     useEffect(() => {
-        const reload = () => setExtraPayStore(loadExtraPayStore());
+        let cancelled = false;
+        const reload = () => {
+            loadExtraPayStore().then(s => { if (!cancelled) setExtraPayStore(s); });
+        };
+        reload();
         window.addEventListener('focus', reload);
-        return () => window.removeEventListener('focus', reload);
+        return () => { cancelled = true; window.removeEventListener('focus', reload); };
     }, []);
 
     useEffect(() => {

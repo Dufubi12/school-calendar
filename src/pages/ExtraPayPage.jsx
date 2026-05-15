@@ -1,20 +1,23 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSchedule } from '../context/ScheduleContext';
-import { Wallet, BookOpen, Wrench, Clock, Save } from 'lucide-react';
+import { Wallet, BookOpen, Wrench, Clock } from 'lucide-react';
 import {
-    DEFAULT_RATES,
     SCHEDULE_OWNER,
-    loadStore,
-    saveStore,
     getEntry,
     setEntry,
-    getRate,
     setTeacherRate,
     setDefaultRate,
     getCurrentPeriod,
     computeForPeriod,
 } from '../lib/extraPay';
+import {
+    fetchStore as apiFetchStore,
+    saveEntry as apiSaveEntry,
+    saveTeacherRate as apiSaveTeacherRate,
+    saveDefaultRates as apiSaveDefaults,
+    DEFAULT_RATES,
+} from '../lib/extraPayApi';
 
 const monthName = (period) => {
     const [y, m] = period.split('-').map(Number);
@@ -25,8 +28,25 @@ const ExtraPayPage = () => {
     const { teachers } = useSchedule();
     const { isAdmin, isTeacher, currentUser } = useAuth();
 
-    const [store, setStore] = useState(() => loadStore());
+    const [store, setStore] = useState({
+        rates: { ...DEFAULT_RATES },
+        ratesPerTeacher: {},
+        entries: {},
+    });
+    const [loading, setLoading] = useState(true);
     const [period, setPeriod] = useState(getCurrentPeriod());
+
+    // Initial fetch from Supabase
+    useEffect(() => {
+        let cancelled = false;
+        apiFetchStore().then(s => {
+            if (!cancelled) {
+                setStore(s);
+                setLoading(false);
+            }
+        });
+        return () => { cancelled = true; };
+    }, []);
 
     const currentTeacherId = isTeacher ? currentUser?.teacherId : null;
     const currentTeacher = useMemo(
@@ -34,10 +54,34 @@ const ExtraPayPage = () => {
         [teachers, currentTeacherId]
     );
 
-    const persist = useCallback((next) => {
+    // Optimistic local update + persist to Supabase
+    const persistEntry = useCallback((next, teacherId, periodKey) => {
         setStore(next);
-        saveStore(next);
+        const entry = next.entries?.[String(teacherId)]?.[periodKey] || {};
+        apiSaveEntry(teacherId, periodKey, entry);
     }, []);
+
+    const persistRate = useCallback((next, teacherId) => {
+        setStore(next);
+        const rates = next.ratesPerTeacher?.[String(teacherId)] || {};
+        apiSaveTeacherRate(teacherId, rates);
+    }, []);
+
+    const persistDefaults = useCallback((next) => {
+        setStore(next);
+        apiSaveDefaults(next.rates);
+    }, []);
+
+    if (loading) {
+        return (
+            <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+                <Header isAdmin={isAdmin} />
+                <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--color-text-muted)' }}>
+                    Загрузка…
+                </div>
+            </div>
+        );
+    }
 
     // === Teacher view ===
     if (isTeacher && currentTeacher) {
@@ -50,12 +94,12 @@ const ExtraPayPage = () => {
 
         const updateField = (field, value) => {
             const next = setEntry(store, currentTeacher.id, period, { [field]: Number(value) || 0 });
-            persist(next);
+            persistEntry(next, currentTeacher.id, period);
         };
 
         const updateMyRate = (key, value) => {
             const next = setTeacherRate(store, currentTeacher.id, key, value);
-            persist(next);
+            persistRate(next, currentTeacher.id);
         };
 
         const myCustomRates = store.ratesPerTeacher?.[String(currentTeacher.id)] || {};
@@ -175,17 +219,17 @@ const ExtraPayPage = () => {
 
     const updateAdminField = (teacherId, field, value) => {
         const next = setEntry(store, teacherId, period, { [field]: Number(value) || 0 });
-        persist(next);
+        persistEntry(next, teacherId, period);
     };
 
     const updateRate = (teacherId, key, value) => {
         const next = setTeacherRate(store, teacherId, key, value);
-        persist(next);
+        persistRate(next, teacherId);
     };
 
     const updateDefaultRate = (key, value) => {
         const next = setDefaultRate(store, key, value);
-        persist(next);
+        persistDefaults(next);
     };
 
     return (

@@ -9,6 +9,12 @@ import {
     deleteInvitation as apiDeleteInvitation
 } from '../lib/api';
 import RoleFilterTabs, { filterByRole, isTutor } from '../components/RoleFilterTabs';
+import { REAL_SCHEDULE } from '../data/mockData';
+
+// Expose REAL_SCHEDULE for conflict-check (used inside modal useMemo)
+if (typeof window !== 'undefined') {
+    window.__REAL_SCHEDULE__ = REAL_SCHEDULE;
+}
 
 const STATUS_LABELS = {
     pending: 'Ожидает',
@@ -232,7 +238,9 @@ const InvitationCard = ({ invitation, isAdminView, onDelete, onAccept, onDecline
     );
 };
 
-const CreateInvitationModal = ({ teachers, bellSchedule, onClose, onCreate }) => {
+const DAY_NAMES = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+
+const CreateInvitationModal = ({ teachers, bellSchedule, existingInvitations, onClose, onCreate }) => {
     const [teacherId, setTeacherId] = useState('');
     const [modalRoleFilter, setModalRoleFilter] = useState('all');
     const filteredModalTeachers = useMemo(
@@ -255,6 +263,73 @@ const CreateInvitationModal = ({ teachers, bellSchedule, onClose, onCreate }) =>
     const [note, setNote] = useState('');
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const [availability, setAvailability] = useState({});
+    const [forceCreate, setForceCreate] = useState(false);
+
+    // Load availability once for conflict check
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const { loadAvailability } = await import('../lib/api');
+                const data = await loadAvailability();
+                if (!cancelled) setAvailability(data || {});
+            } catch (err) {
+                console.error('Failed to load availability for conflict check', err);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, []);
+
+    // Compute conflicts whenever inputs change
+    const conflicts = useMemo(() => {
+        if (!teacherId || !date || !time) return [];
+        const tIdNum = Number(teacherId);
+        const teacher = teachers.find(t => t.id === tIdNum);
+        if (!teacher) return [];
+        const lastName = teacher.name.split(' ')[0];
+        const issues = [];
+
+        // 1) Day of week + school schedule (REAL_SCHEDULE)
+        try {
+            const dow = DAY_NAMES[new Date(date + 'T00:00:00').getDay()];
+            // REAL_SCHEDULE: { className: { dayName: [{time, subject, teacher}] } }
+            // We import it lazily to avoid heavy state — search via global module
+            // eslint-disable-next-line no-undef
+            const REAL = window.__REAL_SCHEDULE__;
+            if (REAL) {
+                Object.entries(REAL).forEach(([className, days]) => {
+                    const lessons = days[dow] || [];
+                    lessons.forEach(l => {
+                        if (l.teacher === lastName && l.time === time) {
+                            issues.push(`Уже занят: ${className} — ${l.subject} (${l.time})`);
+                        }
+                    });
+                });
+            }
+        } catch { /* ignore */ }
+
+        // 2) Teacher's availability marked as busy
+        const tid = String(teacher.id);
+        const dow = DAY_NAMES[new Date(date + 'T00:00:00').getDay()];
+        const status = availability[tid]?.[dow]?.[time];
+        if (status === 'busy') {
+            issues.push(`Педагог отметил себя занятым в этот слот («Мои слоты»: ${dow}, ${time})`);
+        }
+
+        // 3) Existing invitation for same teacher/date/time
+        const taken = (existingInvitations || []).find(inv =>
+            inv.teacherId === tIdNum &&
+            inv.date === date &&
+            inv.time === time &&
+            inv.status !== 'declined'
+        );
+        if (taken) {
+            issues.push(`Уже есть приглашение на этот слот (статус: ${taken.status === 'accepted' ? 'принято' : 'ожидает'})`);
+        }
+
+        return issues;
+    }, [teacherId, date, time, teachers, availability, existingInvitations]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -284,6 +359,12 @@ const CreateInvitationModal = ({ teachers, bellSchedule, onClose, onCreate }) =>
         const teacher = teachers.find(t => t.id === Number(teacherId));
         if (!teacher) {
             setError('Учитель не найден');
+            return;
+        }
+
+        // Conflict check — block unless forceCreate is set
+        if (conflicts.length > 0 && !forceCreate) {
+            setError('Есть конфликты по слоту. Отметьте «Создать всё равно» чтобы продолжить.');
             return;
         }
 
@@ -497,6 +578,33 @@ const CreateInvitationModal = ({ teachers, bellSchedule, onClose, onCreate }) =>
                             }}
                         />
                     </div>
+
+                    {conflicts.length > 0 && (
+                        <div style={{
+                            padding: '10px 14px',
+                            backgroundColor: 'var(--color-warning-bg)',
+                            border: '1px solid var(--color-warning-border)',
+                            color: 'var(--color-warning)',
+                            borderRadius: '8px',
+                            fontSize: '0.85rem'
+                        }}>
+                            <div style={{ fontWeight: 700, marginBottom: '4px' }}>⚠️ Конфликт по слоту:</div>
+                            <ul style={{ margin: 0, paddingLeft: '18px' }}>
+                                {conflicts.map((c, i) => <li key={i}>{c}</li>)}
+                            </ul>
+                            <label style={{
+                                display: 'flex', alignItems: 'center', gap: '6px',
+                                marginTop: '8px', fontSize: '0.82rem', cursor: 'pointer'
+                            }}>
+                                <input
+                                    type="checkbox"
+                                    checked={forceCreate}
+                                    onChange={(e) => setForceCreate(e.target.checked)}
+                                />
+                                <span>Создать всё равно</span>
+                            </label>
+                        </div>
+                    )}
 
                     {error && (
                         <div style={{
@@ -808,6 +916,7 @@ const InvitationsPage = () => {
                 <CreateInvitationModal
                     teachers={teachers}
                     bellSchedule={bellSchedule}
+                    existingInvitations={invitations}
                     onClose={() => setShowModal(false)}
                     onCreate={handleCreate}
                 />

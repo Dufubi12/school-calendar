@@ -101,7 +101,11 @@ const TeacherSchedulePage = () => {
     // Ставка учителя из Supabase (с fallback 500)
     const teacherRate = useMemo(() => {
         if (!selectedTeacher) return 500;
-        return teacherRatesMap[selectedTeacher.id] !== undefined ? teacherRatesMap[selectedTeacher.id] : 500;
+        const r = teacherRatesMap[selectedTeacher.id];
+        if (r === undefined || r === null) return 500;
+        // New shape: { base, sonastroyka, ... } — fall back to old shape (raw number) for safety
+        if (typeof r === 'object') return r.base ?? 500;
+        return r;
     }, [selectedTeacher, teacherRatesMap]);
 
     // Строим недельное расписание учителя из REAL_SCHEDULE

@@ -1,10 +1,39 @@
+import { useEffect, useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { Calendar, Users, BarChart3, Wrench, UserCheck, ClipboardCheck, LogOut, CalendarClock, Mail, Tag, GraduationCap, Sprout, Wallet } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { loadInvitations } from '../lib/api';
 
 const Layout = () => {
     const { currentUser, isAdmin, isTeacher, logout } = useAuth();
     const location = useLocation();
+    const [pendingCount, setPendingCount] = useState(0);
+
+    // Poll pending invitations for current teacher (refresh every 30s + on focus)
+    useEffect(() => {
+        if (!isTeacher || !currentUser?.teacherId) return;
+        let cancelled = false;
+        const tid = currentUser.teacherId;
+        const refresh = async () => {
+            try {
+                const invs = await loadInvitations();
+                if (cancelled) return;
+                const count = (invs || []).filter(
+                    inv => inv.teacherId === tid && inv.status === 'pending'
+                ).length;
+                setPendingCount(count);
+            } catch { /* ignore */ }
+        };
+        refresh();
+        const id = setInterval(refresh, 30000);
+        const onFocus = () => refresh();
+        window.addEventListener('focus', onFocus);
+        return () => {
+            cancelled = true;
+            clearInterval(id);
+            window.removeEventListener('focus', onFocus);
+        };
+    }, [isTeacher, currentUser]);
 
     const linkStyle = (path) => {
         const active = location.pathname === path;
@@ -110,11 +139,33 @@ const Layout = () => {
                         flex: 1,
                         justifyContent: 'center'
                     }}>
-                        {links.map(({ to, label, icon: Icon }) => (
-                            <Link key={to} to={to} style={linkStyle(to)}>
-                                <Icon size={15} /> {label}
-                            </Link>
-                        ))}
+                        {links.map(({ to, label, icon: Icon }) => {
+                            // Show pending count badge on teacher's "Моё расписание"
+                            const showBadge = isTeacher && to === '/teacher-schedule' && pendingCount > 0;
+                            return (
+                                <Link key={to} to={to} style={linkStyle(to)}>
+                                    <Icon size={15} /> {label}
+                                    {showBadge && (
+                                        <span style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            minWidth: '18px',
+                                            height: '18px',
+                                            padding: '0 5px',
+                                            borderRadius: '999px',
+                                            backgroundColor: 'var(--color-danger)',
+                                            color: '#fff',
+                                            fontSize: '0.7rem',
+                                            fontWeight: 700,
+                                            marginLeft: '2px'
+                                        }}>
+                                            {pendingCount}
+                                        </span>
+                                    )}
+                                </Link>
+                            );
+                        })}
                     </nav>
 
                     {/* User chip + logout */}

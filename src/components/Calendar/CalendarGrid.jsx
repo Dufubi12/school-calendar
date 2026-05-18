@@ -139,16 +139,23 @@ const CalendarGrid = ({ currentDate, onDayClick, substitutions = [], selectedCla
                                     {dayEvents.slice(0, 5).map(event => {
                                         const isSubstitution = event.type === 'substitution';
                                         const isClub = event.type === 'club';
-                                        const bgColor = isSubstitution
-                                            ? 'var(--color-danger-bg)'
-                                            : isClub ? '#F3EAFB' : 'var(--color-success-bg)';
-                                        const textColor = isSubstitution
-                                            ? 'var(--color-danger)'
-                                            : isClub ? '#6b21a8' : 'var(--color-success)';
-                                        const borderColor = isSubstitution
-                                            ? 'var(--color-danger-border)'
-                                            : isClub ? '#D6BBE6' : 'var(--color-success-border)';
-                                        const icon = isSubstitution ? '🔄' : isClub ? '🎯' : '✓';
+                                        const isPending = event.type === 'pending-invitation';
+                                        const bgColor = isPending
+                                            ? 'var(--color-warning-bg)'
+                                            : isSubstitution
+                                                ? 'var(--color-danger-bg)'
+                                                : isClub ? '#F3EAFB' : 'var(--color-success-bg)';
+                                        const textColor = isPending
+                                            ? 'var(--color-warning)'
+                                            : isSubstitution
+                                                ? 'var(--color-danger)'
+                                                : isClub ? '#6b21a8' : 'var(--color-success)';
+                                        const borderColor = isPending
+                                            ? 'var(--color-warning-border)'
+                                            : isSubstitution
+                                                ? 'var(--color-danger-border)'
+                                                : isClub ? '#D6BBE6' : 'var(--color-success-border)';
+                                        const icon = isPending ? '⏳' : isSubstitution ? '🔄' : isClub ? '🎯' : '✓';
                                         const time = event.startTime || (event.time ? event.time.split('-')[0] : '');
                                         const teacher = resolveFullName(event.teacher || '');
 

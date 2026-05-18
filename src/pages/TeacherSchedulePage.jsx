@@ -1,9 +1,10 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSchedule } from '../context/ScheduleContext';
 import { useAuth } from '../context/AuthContext';
 import { REAL_SCHEDULE } from '../data/mockData';
 import { loadHomeworkChecks, loadHomeworkRates, loadLessonTypes, loadTeacherRates } from '../lib/api';
-import { UserCheck } from 'lucide-react';
+import { loadInvitations, respondToInvitation } from '../lib/api';
+import { UserCheck, Mail, Check, X, Clock } from 'lucide-react';
 
 const WEEKDAYS = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница'];
 const WEEKDAY_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт'];
@@ -81,6 +82,7 @@ const TeacherSchedulePage = () => {
     const [homeworkRates, setHomeworkRates] = useState({});
     const [lessonTypes, setLessonTypes] = useState({});
     const [teacherRatesMap, setTeacherRatesMap] = useState({});
+    const [invitations, setInvitations] = useState([]);
 
     useEffect(() => {
         Promise.all([
@@ -88,12 +90,39 @@ const TeacherSchedulePage = () => {
             loadHomeworkRates().catch(() => ({})),
             loadLessonTypes().catch(() => ({})),
             loadTeacherRates().catch(() => ({})),
-        ]).then(([checks, hwRates, types, tRates]) => {
+            loadInvitations().catch(() => []),
+        ]).then(([checks, hwRates, types, tRates, invs]) => {
             setHomeworkChecks(checks);
             setHomeworkRates(hwRates);
             setLessonTypes(types);
             setTeacherRatesMap(tRates);
+            setInvitations(invs);
         });
+    }, []);
+
+    // Pending invitations for current teacher
+    const pendingInvitations = useMemo(() => {
+        if (!isTeacher || !currentUser?.teacherId) return [];
+        return invitations.filter(inv =>
+            inv.teacherId === currentUser.teacherId && inv.status === 'pending'
+        );
+    }, [invitations, isTeacher, currentUser]);
+
+    const handleRespond = useCallback(async (invId, newStatus) => {
+        // Optimistic update
+        const respondedAt = new Date().toISOString();
+        setInvitations(prev => prev.map(inv =>
+            inv.id === invId ? { ...inv, status: newStatus, respondedAt } : inv
+        ));
+        try {
+            await respondToInvitation(invId, newStatus);
+        } catch (err) {
+            console.error('Failed to respond', err);
+            // rollback
+            setInvitations(prev => prev.map(inv =>
+                inv.id === invId ? { ...inv, status: 'pending', respondedAt: null } : inv
+            ));
+        }
     }, []);
 
     const selectedTeacher = teachers.find(t => t.id === Number(selectedTeacherId));
@@ -254,6 +283,88 @@ const TeacherSchedulePage = () => {
                     Расписание учителя
                 </h1>
             </div>
+
+            {/* Pending invitations panel — only for teacher view */}
+            {isTeacher && pendingInvitations.length > 0 && (
+                <div className="card" style={{
+                    marginBottom: '1.5rem',
+                    padding: '1rem 1.25rem',
+                    borderLeft: '4px solid var(--color-warning)',
+                    backgroundColor: 'var(--color-warning-bg)',
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                        <Mail size={20} color="var(--color-warning)" />
+                        <h3 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--color-warning)' }}>
+                            Новые приглашения ({pendingInvitations.length})
+                        </h3>
+                    </div>
+                    <p style={{ margin: '0 0 12px', fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
+                        Подтвердите или отклоните занятие. После подтверждения слот будет занят.
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        {pendingInvitations.map(inv => (
+                            <div key={inv.id} style={{
+                                backgroundColor: 'var(--color-bg-card)',
+                                border: '1px solid var(--color-border)',
+                                borderRadius: 'var(--radius)',
+                                padding: '12px 14px',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                gap: '10px',
+                                flexWrap: 'wrap'
+                            }}>
+                                <div style={{ flex: 1, minWidth: '220px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', color: 'var(--color-text-muted)', marginBottom: '4px' }}>
+                                        <Clock size={13} />
+                                        <span>{new Date(inv.date + 'T00:00:00').toLocaleDateString('ru-RU', { weekday: 'short', day: '2-digit', month: '2-digit' })} · {inv.time}</span>
+                                    </div>
+                                    <div style={{ fontWeight: 600, color: 'var(--color-primary-deep)' }}>
+                                        {inv.subject} · <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>{inv.grade}</span>
+                                    </div>
+                                    {inv.note && (
+                                        <div style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                                            💬 {inv.note}
+                                        </div>
+                                    )}
+                                </div>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button
+                                        onClick={() => handleRespond(inv.id, 'accepted')}
+                                        className="btn"
+                                        style={{
+                                            display: 'flex', alignItems: 'center', gap: '6px',
+                                            padding: '8px 14px',
+                                            backgroundColor: 'var(--color-success)',
+                                            color: '#fff',
+                                            border: 'none',
+                                            fontSize: '0.85rem',
+                                            fontWeight: 600
+                                        }}
+                                    >
+                                        <Check size={14} /> Принять
+                                    </button>
+                                    <button
+                                        onClick={() => handleRespond(inv.id, 'declined')}
+                                        className="btn"
+                                        style={{
+                                            display: 'flex', alignItems: 'center', gap: '6px',
+                                            padding: '8px 14px',
+                                            backgroundColor: 'var(--color-bg-card)',
+                                            color: 'var(--color-danger)',
+                                            border: '1px solid var(--color-danger-border)',
+                                            fontSize: '0.85rem',
+                                            fontWeight: 600
+                                        }}
+                                    >
+                                        <X size={14} /> Отклонить
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Выбор учителя и фильтры */}
             <div className="card" style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>

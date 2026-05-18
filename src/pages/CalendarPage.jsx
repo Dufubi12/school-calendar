@@ -13,6 +13,7 @@ import BellScheduleEditor from '../components/Schedule/BellScheduleEditor';
 import ClubModal from '../components/Schedule/ClubModal';
 import { useSchedule } from '../context/ScheduleContext';
 import { filterByRole, isTutor } from '../components/RoleFilterTabs';
+import { loadInvitations } from '../lib/api';
 
 const CalendarPage = () => {
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -39,6 +40,48 @@ const CalendarPage = () => {
 
     // Data State
     const { events, addEvent, removeEvent, assignTeacherToSlot, bellSchedule, updateBellSchedule, teachers } = useSchedule();
+
+    // Invitations (for calendar display: pending = dashed, accepted = substitution)
+    const [invitations, setInvitations] = useState([]);
+    useEffect(() => {
+        let cancelled = false;
+        const refresh = async () => {
+            try {
+                const data = await loadInvitations();
+                if (!cancelled) setInvitations(data || []);
+            } catch { /* ignore */ }
+        };
+        refresh();
+        const onFocus = () => refresh();
+        window.addEventListener('focus', onFocus);
+        return () => { cancelled = true; window.removeEventListener('focus', onFocus); };
+    }, []);
+
+    // Merge invitations into events as virtual entries
+    const eventsWithInvitations = useMemo(() => {
+        const invEvents = (invitations || [])
+            .filter(inv => inv.status !== 'declined')
+            .map(inv => {
+                const teacher = teachers.find(t => t.id === inv.teacherId);
+                const lastName = teacher ? teacher.name.split(' ')[0] : '';
+                const [startTime, endTime] = (inv.time || '').split('-');
+                return {
+                    id: `inv-${inv.id}`,
+                    type: inv.status === 'accepted' ? 'substitution' : 'pending-invitation',
+                    date: inv.date,
+                    startTime: startTime || '',
+                    endTime: endTime || '',
+                    time: inv.time,
+                    subject: inv.subject,
+                    grade: inv.grade,
+                    className: inv.grade,
+                    teacher: lastName,
+                    teacherName: inv.teacherName,
+                    details: `${inv.status === 'pending' ? '⏳ Предложено' : 'Замена'}: ${inv.subject}`
+                };
+            });
+        return [...events, ...invEvents];
+    }, [events, invitations, teachers]);
 
     // Last names of teachers allowed by current role filter (null = no role filter)
     const allowedTeacherLastNames = useMemo(() => {
@@ -240,7 +283,7 @@ const CalendarPage = () => {
                 <CalendarGrid
                     currentDate={currentDate}
                     onDayClick={handleDayClick}
-                    substitutions={events}
+                    substitutions={eventsWithInvitations}
                     selectedClass={selectedClass}
                     selectedTeacher={selectedTeacher}
                     allowedTeacherLastNames={allowedTeacherLastNames}
@@ -258,7 +301,7 @@ const CalendarPage = () => {
                 date={selectedDate}
                 isOpen={isDetailsOpen}
                 onClose={() => setIsDetailsOpen(false)}
-                lessons={events}
+                lessons={eventsWithInvitations}
                 selectedClass={selectedClass}
                 selectedTeacher={selectedTeacher}
                 allowedTeacherLastNames={allowedTeacherLastNames}

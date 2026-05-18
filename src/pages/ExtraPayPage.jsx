@@ -122,7 +122,7 @@ const ExtraPayPage = () => {
                 <Section
                     icon={<Wrench size={20} />}
                     title="Методическая работа — сборка урока"
-                    hint={`Текущая ставка: ${result.assemblyRate} ₽ за урок · по умолчанию ${store.rates.lessonAssembly} ₽`}
+                    hint={`Ставка: ${result.assemblyRate} ₽ за урок`}
                 >
                     <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
                         <div>
@@ -136,12 +136,6 @@ const ExtraPayPage = () => {
                                 style={{ width: '120px' }}
                             />
                         </div>
-                        <RateField
-                            label="Моя ставка (₽/урок)"
-                            value={myCustomRates.lessonAssembly ?? ''}
-                            placeholder={String(store.rates.lessonAssembly)}
-                            onChange={(v) => updateMyRate('lessonAssembly', v)}
-                        />
                         <ResultPill label="Сумма" value={`${result.assemblyPay.toLocaleString()} ₽`} />
                     </div>
                 </Section>
@@ -149,7 +143,7 @@ const ExtraPayPage = () => {
                 <Section
                     icon={<Clock size={20} />}
                     title="Методическая работа — другое"
-                    hint={`Текущая ставка: ${result.hourlyRate} ₽ за час · по умолчанию ${store.rates.otherHourly} ₽`}
+                    hint={`Ставка: ${result.hourlyRate} ₽ за час`}
                 >
                     <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
                         <div>
@@ -163,23 +157,16 @@ const ExtraPayPage = () => {
                                 style={{ width: '120px' }}
                             />
                         </div>
-                        <RateField
-                            label="Моя ставка (₽/час)"
-                            value={myCustomRates.otherHourly ?? ''}
-                            placeholder={String(store.rates.otherHourly)}
-                            onChange={(v) => updateMyRate('otherHourly', v)}
-                        />
                         <ResultPill label="Сумма" value={`${result.hourlyPay.toLocaleString()} ₽`} />
                     </div>
                 </Section>
 
                 {scheduleVisible && (() => {
-                    const rateKey = isNS ? 'scheduleNS' : 'scheduleSS';
                     return (
                         <Section
                             icon={<BookOpen size={20} />}
                             title={isNS ? 'Работа с расписанием — Начальная школа' : 'Работа с расписанием — Средняя школа'}
-                            hint={`Текущая ставка: ${result.scheduleRate} ₽ за цикл · по умолчанию ${store.rates[rateKey]} ₽`}
+                            hint={`Ставка: ${result.scheduleRate} ₽ за цикл`}
                         >
                             <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
                                 <div>
@@ -193,12 +180,6 @@ const ExtraPayPage = () => {
                                         style={{ width: '120px' }}
                                     />
                                 </div>
-                                <RateField
-                                    label="Моя ставка (₽/цикл)"
-                                    value={myCustomRates[rateKey] ?? ''}
-                                    placeholder={String(store.rates[rateKey])}
-                                    onChange={(v) => updateMyRate(rateKey, v)}
-                                />
                                 <ResultPill label="Сумма" value={`${result.schedulePay.toLocaleString()} ₽`} />
                             </div>
                         </Section>

@@ -51,7 +51,7 @@ const AuthenticatedRoutes = () => {
                 <Route path="/extra-pay" element={<ExtraPayPage />} />
                 <Route path="/availability" element={<TeacherAvailabilityPage />} />
                 <Route path="/individual-slots" element={<IndividualSlotsPage />} />
-                <Route path="/invitations" element={<InvitationsPage />} />
+                <Route path="/invitations" element={<AdminOnly><InvitationsPage /></AdminOnly>} />
                 <Route path="*" element={<Navigate to={isAdmin ? "/" : "/teacher-schedule"} replace />} />
             </Route>
         </Routes>

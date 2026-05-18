@@ -43,7 +43,6 @@ const Layout = () => {
         { to: '/teacher-schedule', label: 'Моё расписание', icon: UserCheck },
         { to: '/availability', label: 'Мои слоты', icon: CalendarClock },
         { to: '/individual-slots', label: 'Инд. занятия', icon: GraduationCap },
-        { to: '/invitations', label: 'Приглашения', icon: Mail },
         { to: '/homework', label: 'Проверка ДЗ', icon: ClipboardCheck },
         { to: '/extra-pay', label: 'Доп. оплата', icon: Wallet },
     ];

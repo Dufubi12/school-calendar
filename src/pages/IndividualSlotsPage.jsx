@@ -80,11 +80,19 @@ const IndividualSlotsPage = () => {
         return t ? t.name.split(' ')[0] : null;
     }, [isTeacher, currentUser, teachers]);
 
+    // Resolve current teacher's full name (for display when entry doesn't exist yet)
+    const currentTeacherFullName = useMemo(() => {
+        if (!isTeacher || !currentUser?.teacherId) return null;
+        const t = teachers.find(x => x.id === currentUser.teacherId);
+        return t ? t.name : null;
+    }, [isTeacher, currentUser, teachers]);
+
     // List of teacher last-names that have data
     const teacherKeys = useMemo(() => {
         const keys = Object.keys(slotsByTeacher).sort((a, b) => a.localeCompare(b, 'ru'));
         if (isTeacher && currentTeacherLastName) {
-            return keys.filter(k => k === currentTeacherLastName);
+            // Teacher sees only own entry (always include it, even if not yet in map)
+            return [currentTeacherLastName];
         }
         return keys;
     }, [slotsByTeacher, isTeacher, currentTeacherLastName]);
@@ -103,7 +111,22 @@ const IndividualSlotsPage = () => {
     }, [isTeacher, currentTeacherLastName, teacherKeys, selectedTeacherKey]);
 
     const readOnly = isAdmin && !isTeacher;
-    const selected = selectedTeacherKey ? slotsByTeacher[selectedTeacherKey] : null;
+
+    // If teacher has no entry yet — show an empty placeholder so they can start marking slots
+    const selected = useMemo(() => {
+        if (!selectedTeacherKey) return null;
+        const existing = slotsByTeacher[selectedTeacherKey];
+        if (existing) return existing;
+        // Fallback to empty entry for the current teacher
+        if (isTeacher && selectedTeacherKey === currentTeacherLastName) {
+            return {
+                name: currentTeacherFullName || currentTeacherLastName,
+                description: '',
+                slots: {},
+            };
+        }
+        return null;
+    }, [selectedTeacherKey, slotsByTeacher, isTeacher, currentTeacherLastName, currentTeacherFullName]);
 
     const getCellState = useCallback((day, timeKey) => {
         if (!selected) return 'default';

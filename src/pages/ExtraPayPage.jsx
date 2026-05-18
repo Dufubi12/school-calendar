@@ -72,6 +72,16 @@ const ExtraPayPage = () => {
         apiSaveDefaults(next.rates);
     }, []);
 
+    // Compute admin rows (always — even in teacher view, to keep hook order stable)
+    const rows = useMemo(() => {
+        return teachers.map(t => {
+            const r = computeForPeriod(store, t.id, period, t.name);
+            const isNS = t.name === SCHEDULE_OWNER.NS;
+            const isSS = t.name === SCHEDULE_OWNER.SS;
+            return { teacher: t, result: r, isNS, isSS };
+        });
+    }, [teachers, store, period]);
+
     if (loading) {
         return (
             <div style={{ maxWidth: '900px', margin: '0 auto' }}>
@@ -204,16 +214,6 @@ const ExtraPayPage = () => {
     if (!isAdmin) {
         return <div className="card" style={{ padding: '2rem', textAlign: 'center' }}>Нет доступа</div>;
     }
-
-    // Compute rows for all teachers + filter only those with data or who can have schedule work
-    const rows = useMemo(() => {
-        return teachers.map(t => {
-            const r = computeForPeriod(store, t.id, period, t.name);
-            const isNS = t.name === SCHEDULE_OWNER.NS;
-            const isSS = t.name === SCHEDULE_OWNER.SS;
-            return { teacher: t, result: r, isNS, isSS };
-        });
-    }, [teachers, store, period]);
 
     const onlyWithData = rows.filter(r => r.result.total > 0 || r.isNS || r.isSS);
 

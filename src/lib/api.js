@@ -1,28 +1,82 @@
 import { supabase } from './supabase';
 
 // =====================================================================
-// TEACHER RATES (per-lesson payment)
+// TEACHER RATES (per-lesson payment) — includes category rates
+// Returns: { teacherId: { base, sonastroyka, individual, diagnostika, podgotovka, prodlenka, kruzhki, stazhirovka } }
+// Each category rate is `null` if not set — caller should fall back to base.
 // =====================================================================
 export async function loadTeacherRates() {
     try {
-        const { data, error } = await supabase.from('teacher_rates').select('teacher_id, rate');
+        const { data, error } = await supabase
+            .from('teacher_rates')
+            .select('teacher_id, rate, rate_sonastroyka, rate_individual, rate_diagnostika, rate_podgotovka, rate_prodlenka, rate_kruzhki, rate_stazhirovka');
         if (error) {
             console.error('Failed to load teacher rates:', error);
             return {};
         }
         const map = {};
-        (data || []).forEach(r => { map[r.teacher_id] = r.rate; });
-        return map; // { teacherId: rate }
+        (data || []).forEach(r => {
+            map[r.teacher_id] = {
+                base: r.rate ?? null,
+                sonastroyka: r.rate_sonastroyka ?? null,
+                individual: r.rate_individual ?? null,
+                diagnostika: r.rate_diagnostika ?? null,
+                podgotovka: r.rate_podgotovka ?? null,
+                prodlenka: r.rate_prodlenka ?? null,
+                kruzhki: r.rate_kruzhki ?? null,
+                stazhirovka: r.rate_stazhirovka ?? null,
+            };
+        });
+        return map;
     } catch (err) {
         console.error('loadTeacherRates error:', err);
         return {};
     }
 }
 
+// Returns rate for a given lesson type for a teacher.
+// type: 'Групповой' | 'Индивидуальный' | 'ОГЭ' | 'ЕГЭ' | 'Тьюторский' |
+//       'Сонастройка' | 'Диагностика' | 'Подготовка к школе' | 'Продлёнка' | 'Кружки' | 'Стажировка'
+export function rateForLessonType(teacherRates, teacherId, type, defaultRate) {
+    const r = teacherRates[teacherId];
+    if (!r) return defaultRate;
+    const baseOrDefault = r.base ?? defaultRate;
+    switch (type) {
+        case 'Сонастройка':       return r.sonastroyka ?? baseOrDefault;
+        case 'Индивидуальный':
+        case 'ОГЭ':
+        case 'ЕГЭ':              return r.individual ?? baseOrDefault;
+        case 'Диагностика':       return r.diagnostika ?? baseOrDefault;
+        case 'Подготовка к школе':return r.podgotovka ?? baseOrDefault;
+        case 'Продлёнка':
+        case 'Продленка':         return r.prodlenka ?? baseOrDefault;
+        case 'Кружки':            return r.kruzhki ?? baseOrDefault;
+        case 'Стажировка':        return r.stazhirovka ?? baseOrDefault;
+        case 'Тьюторский':
+        case 'Групповой':
+        default:                  return baseOrDefault;
+    }
+}
+
+// Save base rate without overwriting category-specific rates
 export async function saveTeacherRate(teacherId, rate) {
     const { error } = await supabase
         .from('teacher_rates')
-        .upsert({ teacher_id: teacherId, rate, updated_at: new Date().toISOString() });
+        .upsert(
+            { teacher_id: teacherId, rate, updated_at: new Date().toISOString() },
+            { onConflict: 'teacher_id' }
+        );
+    if (error) throw error;
+}
+
+// Save one category rate (or null to clear it)
+export async function saveCategoryRate(teacherId, categoryKey, value) {
+    // categoryKey: 'rate_sonastroyka' | 'rate_individual' | ...
+    const patch = { teacher_id: teacherId, updated_at: new Date().toISOString() };
+    patch[categoryKey] = value;
+    const { error } = await supabase
+        .from('teacher_rates')
+        .upsert(patch, { onConflict: 'teacher_id' });
     if (error) throw error;
 }
 

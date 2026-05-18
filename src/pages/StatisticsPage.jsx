@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useSchedule } from '../context/ScheduleContext';
 import { REAL_SCHEDULE } from '../data/mockData';
-import { loadHomeworkChecks, loadHomeworkRates, loadLessonTypes, loadTeacherRates, saveTeacherRate } from '../lib/api';
+import { loadHomeworkChecks, loadHomeworkRates, loadLessonTypes, loadTeacherRates, saveTeacherRate, rateForLessonType } from '../lib/api';
 import RoleFilterTabs, { filterByRole } from '../components/RoleFilterTabs';
 import { computeForRange } from '../lib/extraPay';
 import { fetchStore as loadExtraPayStore, DEFAULT_RATES as EP_DEFAULTS } from '../lib/extraPayApi';
@@ -16,6 +16,20 @@ const LESSON_TYPE_COLORS = {
     'ОГЭ': { bg: '#ede9fe', text: '#6b21a8' },
     'ЕГЭ': { bg: '#ffe4e6', text: '#9f1239' },
     'Тьюторский': { bg: '#d1fae5', text: '#065f46' },
+    'Сонастройка': { bg: '#e0f2fe', text: '#075985' },
+    'Диагностика': { bg: '#fce7f3', text: '#9d174d' },
+    'Подготовка к школе': { bg: '#fef9c3', text: '#854d0e' },
+    'Продлёнка': { bg: '#ddd6fe', text: '#5b21b6' },
+    'Кружки': { bg: '#fed7aa', text: '#9a3412' },
+    'Стажировка': { bg: '#e5e7eb', text: '#374151' },
+};
+
+// Determine lesson type for a given slot — auto-detect Сонастройка by time.
+const getLessonTypeForSlot = (slot, lessonTypes) => {
+    // Сонастройка: any slot with start time 08:45
+    if (slot.startTime === '08:45') return 'Сонастройка';
+    const key = `${slot.grade || slot.className}_${slot.dayName || ''}_${slot.startTime}-${slot.endTime}_${slot.teacherName || slot.teacher || ''}`;
+    return lessonTypes[key] || DEFAULT_LESSON_TYPE;
 };
 
 const StatisticsPage = () => {
@@ -100,10 +114,13 @@ const StatisticsPage = () => {
     // Default rate for new teachers or "set all"
     const [defaultRate, setDefaultRate] = useState(500);
 
-    // Set rate for specific teacher (optimistic + persist)
+    // Set base rate for specific teacher (optimistic + persist)
     const setTeacherRate = (teacherId, rate) => {
         const prev = teacherRates;
-        setTeacherRates(curr => ({ ...curr, [teacherId]: rate }));
+        setTeacherRates(curr => ({
+            ...curr,
+            [teacherId]: { ...(curr[teacherId] || {}), base: rate }
+        }));
         saveTeacherRate(teacherId, rate).catch(err => {
             console.error('Failed to save teacher rate', err);
             setTeacherRates(prev);
@@ -114,7 +131,7 @@ const StatisticsPage = () => {
     const applyDefaultRateToAll = async () => {
         const prev = teacherRates;
         const newRates = {};
-        teachers.forEach(t => { newRates[t.id] = defaultRate; });
+        teachers.forEach(t => { newRates[t.id] = { ...(prev[t.id] || {}), base: defaultRate }; });
         setTeacherRates(newRates);
         try {
             await Promise.all(teachers.map(t => saveTeacherRate(t.id, defaultRate)));
@@ -133,6 +150,7 @@ const StatisticsPage = () => {
         teachers.forEach(teacher => {
             let lessonCount = 0;
             let totalHours = 0;
+            let lessonPayment = 0;
 
             // Iterate through each day in the date range
             for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
@@ -144,7 +162,7 @@ const StatisticsPage = () => {
 
                 lessonCount += teacherSlots.length;
 
-                // Calculate hours
+                // Calculate hours and payment per lesson type
                 teacherSlots.forEach(slot => {
                     if (slot.startTime && slot.endTime) {
                         const [startHour, startMin] = slot.startTime.split(':').map(Number);
@@ -152,11 +170,14 @@ const StatisticsPage = () => {
                         const hours = (endHour * 60 + endMin - startHour * 60 - startMin) / 60;
                         totalHours += hours;
                     }
+                    const lessonType = getLessonTypeForSlot(slot, lessonTypes);
+                    const slotRate = rateForLessonType(teacherRates, teacher.id, lessonType, defaultRate);
+                    lessonPayment += slotRate;
                 });
             }
 
-            const rate = teacherRates[teacher.id] !== undefined ? teacherRates[teacher.id] : defaultRate;
-            const lessonPayment = lessonCount * rate;
+            // Base rate for display (inline edit) — either set, or defaults
+            const baseRate = teacherRates[teacher.id]?.base ?? defaultRate;
 
             // Homework checks for this teacher in the date range
             let hwCount = 0;
@@ -178,7 +199,8 @@ const StatisticsPage = () => {
                 lessonCount,
                 totalHours: totalHours.toFixed(1),
                 payment: lessonPayment + hwPayment + extra.total,
-                rate,
+                rate: baseRate,
+                lessonPayment,
                 hwCount,
                 hwPayment,
                 extraPay: extra.total,
@@ -190,7 +212,7 @@ const StatisticsPage = () => {
 
         // Sort by lesson count descending
         return stats.sort((a, b) => b.lessonCount - a.lessonCount);
-    }, [teachers, startDate, endDate, teacherRates, defaultRate, getSlotsForDate, homeworkChecks, homeworkRates, extraPayStore]);
+    }, [teachers, startDate, endDate, teacherRates, defaultRate, getSlotsForDate, homeworkChecks, homeworkRates, lessonTypes, extraPayStore]);
 
     // Apply role filter
     const filteredStats = useMemo(

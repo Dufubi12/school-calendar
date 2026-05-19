@@ -29,33 +29,43 @@ export const AuthProvider = ({ children }) => {
             full_name: null,
         };
 
-        // Try fetching the real profile with a 3-second timeout safety net
+        // Try fetching the real profile with a 10-second timeout safety net.
+        // If fetch succeeds even AFTER fallback was applied, swap in the real profile.
+        const fetchPromise = supabase
+            .from('profiles')
+            .select('id, email, role, teacher_id, full_name')
+            .eq('id', userId)
+            .maybeSingle()
+            .then(({ data, error }) => {
+                if (error) {
+                    console.warn('[Auth] profiles fetch error:', error.message);
+                    return null;
+                }
+                if (data) {
+                    console.log('[Auth] Got real profile from Supabase:', { id: data.id, role: data.role, teacher_id: data.teacher_id });
+                    setProfile(data);
+                    return data;
+                }
+                return null;
+            })
+            .catch(err => {
+                console.warn('[Auth] profiles fetch threw:', err?.message);
+                return null;
+            });
+
         try {
             const result = await Promise.race([
-                supabase
-                    .from('profiles')
-                    .select('id, email, role, teacher_id, full_name')
-                    .eq('id', userId)
-                    .maybeSingle(),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('profile fetch timeout')), 3000))
+                fetchPromise,
+                new Promise((_, reject) => setTimeout(() => reject(new Error('profile fetch timeout')), 10000))
             ]);
-
-            const { data, error } = result || {};
-            if (error) {
-                console.warn('[Auth] profiles fetch error, using fallback:', error.message);
-                setProfile(fallbackProfile);
-                return fallbackProfile;
-            }
-            if (data) {
-                setProfile(data);
-                return data;
-            }
-            // No row yet — use fallback
+            if (result) return result;
+            console.warn('[Auth] No profile row found, using fallback');
             setProfile(fallbackProfile);
             return fallbackProfile;
         } catch (err) {
-            console.warn('[Auth] profile fetch failed, using fallback:', err?.message);
+            console.warn('[Auth] profile fetch timed out, using fallback for now; real profile will swap in if it arrives:', err?.message);
             setProfile(fallbackProfile);
+            // Don't await — let the fetch finish in background and overwrite fallback
             return fallbackProfile;
         }
     }, []);

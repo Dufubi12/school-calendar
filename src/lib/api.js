@@ -726,6 +726,76 @@ export async function deleteIndividualSlot(id) {
 }
 
 // =====================================================================
+// TEACHER TIME GRID — custom time slots for the IZ page (per teacher)
+// =====================================================================
+
+// Default fallback grid (used when teacher has no custom rows yet)
+export const DEFAULT_HOUR_GRID = (() => {
+    const out = [];
+    for (let h = 8; h < 22; h++) {
+        out.push({
+            start_time: `${String(h).padStart(2, '0')}:00`,
+            end_time: `${String(h + 1).padStart(2, '0')}:00`,
+        });
+    }
+    return out;
+})();
+
+// Returns array of { id, start_time, end_time } sorted by start_time.
+// If no rows in DB — returns DEFAULT_HOUR_GRID (no id fields).
+export async function loadTeacherTimeGrid(teacherId) {
+    if (!teacherId) return [...DEFAULT_HOUR_GRID];
+    const { data, error } = await supabase
+        .from('teacher_time_grid')
+        .select('id, start_time, end_time')
+        .eq('teacher_id', teacherId)
+        .order('start_time');
+    if (error) {
+        console.warn('[loadTeacherTimeGrid] failed:', error.message);
+        return [...DEFAULT_HOUR_GRID];
+    }
+    if (!data || data.length === 0) return [...DEFAULT_HOUR_GRID];
+    return data;
+}
+
+export async function addTeacherTimeSlot(teacherId, startTime, endTime) {
+    if (!teacherId) throw new Error('teacherId required');
+    if (!startTime || !endTime || startTime >= endTime) {
+        throw new Error('Введите корректное время начала и окончания');
+    }
+    const { data, error } = await supabase
+        .from('teacher_time_grid')
+        .insert({ teacher_id: teacherId, start_time: startTime, end_time: endTime })
+        .select()
+        .single();
+    if (error) throw error;
+    return data;
+}
+
+export async function deleteTeacherTimeSlot(id) {
+    const { error } = await supabase
+        .from('teacher_time_grid')
+        .delete()
+        .eq('id', id);
+    if (error) throw error;
+}
+
+// Seed teacher's custom grid with the default rows (used when teacher
+// wants to start editing — gives them a starting point instead of empty).
+export async function seedTeacherTimeGridFromDefault(teacherId) {
+    if (!teacherId) throw new Error('teacherId required');
+    const rows = DEFAULT_HOUR_GRID.map(s => ({
+        teacher_id: teacherId,
+        start_time: s.start_time,
+        end_time: s.end_time,
+    }));
+    const { error } = await supabase
+        .from('teacher_time_grid')
+        .upsert(rows, { onConflict: 'teacher_id,start_time,end_time' });
+    if (error) throw error;
+}
+
+// =====================================================================
 // TEACHERS / LESSONS / BELL SCHEDULE — currently still loaded from mockData,
 // but we expose Supabase loaders for future migration.
 // =====================================================================

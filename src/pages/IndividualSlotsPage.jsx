@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSchedule } from '../context/ScheduleContext';
-import { GraduationCap, Check, X, Info, Plus, Trash2 } from 'lucide-react';
-import { loadIndividualSlots, saveIndividualSlot, createSingleIndividualSlot, createRecurringIndividualSlot, deleteIndividualSlot, loadAvailability, loadInvitations, setIzSlotApproval } from '../lib/api';
+import { GraduationCap, Check, X, Info, Plus, Trash2, Clock } from 'lucide-react';
+import { loadIndividualSlots, saveIndividualSlot, createSingleIndividualSlot, createRecurringIndividualSlot, deleteIndividualSlot, loadAvailability, loadInvitations, setIzSlotApproval, loadTeacherTimeGrid, addTeacherTimeSlot, deleteTeacherTimeSlot, seedTeacherTimeGridFromDefault, DEFAULT_HOUR_GRID } from '../lib/api';
 import { REAL_SCHEDULE } from '../data/mockData';
 
 const DAY_FULL_RU = {
@@ -14,17 +14,6 @@ const DAY_FULL_RU = {
 const DAYS = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
 const DAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 const DAY_FULL = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
-
-// Hourly slots 08:00 -> 22:00
-const HOUR_SLOTS = (() => {
-    const slots = [];
-    for (let h = 8; h < 22; h++) {
-        const start = String(h).padStart(2, '0');
-        const end = String(h + 1).padStart(2, '0');
-        slots.push(`${start}:00-${end}:00`);
-    }
-    return slots;
-})();
 
 const NEXT_STATE = { 'default': 'free', 'free': 'busy', 'busy': 'default' };
 
@@ -38,6 +27,9 @@ const IndividualSlotsPage = () => {
     const [acceptedInvitations, setAcceptedInvitations] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showAddModal, setShowAddModal] = useState(false);
+    const [showGridModal, setShowGridModal] = useState(false);
+    // Custom time grid for the currently selected teacher
+    const [timeGrid, setTimeGrid] = useState([]); // [{id?, start_time, end_time}]
 
     useEffect(() => {
         let cancelled = false;
@@ -129,6 +121,27 @@ const IndividualSlotsPage = () => {
         }
         return null;
     }, [selectedTeacherKey, slotsByTeacher, teachers, isTeacher, currentTeacherLastName, currentTeacherFullName]);
+
+    // Load custom time grid for the selected teacher
+    useEffect(() => {
+        const teacherId = selected?.teacherId
+            || teachers.find(t => t.name.split(' ')[0] === selectedTeacherKey)?.id;
+        if (!teacherId) {
+            setTimeGrid([]);
+            return;
+        }
+        let cancelled = false;
+        loadTeacherTimeGrid(teacherId).then(grid => {
+            if (!cancelled) setTimeGrid(grid || []);
+        });
+        return () => { cancelled = true; };
+    }, [selected, selectedTeacherKey, teachers]);
+
+    // Time slots used to render the grid (custom or fallback)
+    const timeSlotKeys = useMemo(() => {
+        const rows = timeGrid.length > 0 ? timeGrid : DEFAULT_HOUR_GRID;
+        return rows.map(r => `${r.start_time}-${r.end_time}`);
+    }, [timeGrid]);
 
     const getCellState = useCallback((day, timeKey) => {
         if (!selected) return 'default';
@@ -416,13 +429,23 @@ const IndividualSlotsPage = () => {
                                     </div>
                                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '0.75rem', flexWrap: 'wrap' }}>
                                         {!readOnly && (
-                                            <button
-                                                onClick={() => setShowAddModal(true)}
-                                                className="btn btn-primary"
-                                                style={{ padding: '6px 12px', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '4px' }}
-                                            >
-                                                <Plus size={14} /> Свой слот
-                                            </button>
+                                            <>
+                                                <button
+                                                    onClick={() => setShowGridModal(true)}
+                                                    className="btn btn-secondary"
+                                                    style={{ padding: '6px 12px', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                                    title="Редактировать список временных интервалов слева"
+                                                >
+                                                    <Clock size={14} /> Сетка времени
+                                                </button>
+                                                <button
+                                                    onClick={() => setShowAddModal(true)}
+                                                    className="btn btn-primary"
+                                                    style={{ padding: '6px 12px', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                                >
+                                                    <Plus size={14} /> Свой слот
+                                                </button>
+                                            </>
                                         )}
                                         <span style={{ padding: '3px 8px', borderRadius: '4px', backgroundColor: '#f0fdf4', color: '#059669', border: '1px solid #d1fae5' }}>
                                             <Check size={11} style={{ verticalAlign: 'middle' }} /> Свободно
@@ -518,7 +541,7 @@ const IndividualSlotsPage = () => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {HOUR_SLOTS.map((slot, rowIdx) => (
+                                        {timeSlotKeys.map((slot, rowIdx) => (
                                             <tr key={slot} style={{ backgroundColor: rowIdx % 2 === 0 ? '#fff' : '#f9fafb' }}>
                                                 <td style={{ padding: '6px 8px', borderBottom: '1px solid #e2e8f0', fontWeight: 500, whiteSpace: 'nowrap', backgroundColor: '#f8fafc' }}>
                                                     {slot}
@@ -637,6 +660,21 @@ const IndividualSlotsPage = () => {
                     onSubmit={handleAddSlot}
                 />
             )}
+
+            {showGridModal && selected && (
+                <TimeGridModal
+                    teacherId={selected.teacherId || teachers.find(t => t.name.split(' ')[0] === selectedTeacherKey)?.id}
+                    initialGrid={timeGrid}
+                    onClose={() => setShowGridModal(false)}
+                    onChanged={async () => {
+                        const teacherId = selected.teacherId || teachers.find(t => t.name.split(' ')[0] === selectedTeacherKey)?.id;
+                        if (teacherId) {
+                            const fresh = await loadTeacherTimeGrid(teacherId);
+                            setTimeGrid(fresh || []);
+                        }
+                    }}
+                />
+            )}
         </div>
     );
 };
@@ -740,6 +778,172 @@ const AddSlotModal = ({ onClose, onSubmit }) => {
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+    );
+};
+
+// ===== Time Grid Modal =====
+// Lets teacher/admin add or remove time intervals shown in the left column.
+// If teacher has no custom rows, fallback DEFAULT_HOUR_GRID is displayed
+// — first edit (add or seed) materializes those rows into the DB.
+const TimeGridModal = ({ teacherId, initialGrid, onClose, onChanged }) => {
+    const [grid, setGrid] = useState(initialGrid || []);
+    const [start, setStart] = useState('08:00');
+    const [end, setEnd] = useState('09:00');
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState(null);
+
+    const isFallback = !grid.some(r => r.id); // no real DB rows yet
+
+    const reload = async () => {
+        const fresh = await loadTeacherTimeGrid(teacherId);
+        setGrid(fresh || []);
+        if (onChanged) await onChanged();
+    };
+
+    const handleAdd = async (e) => {
+        e.preventDefault();
+        if (!teacherId) return;
+        setError(null);
+        if (!start || !end || start >= end) {
+            setError('Введите корректное время начала и окончания');
+            return;
+        }
+        setBusy(true);
+        try {
+            // If the teacher has no custom rows yet, materialize defaults first
+            // so the new slot doesn't replace the fallback (otherwise the table
+            // would shrink to a single row).
+            if (isFallback) {
+                await seedTeacherTimeGridFromDefault(teacherId);
+            }
+            await addTeacherTimeSlot(teacherId, start, end);
+            await reload();
+        } catch (err) {
+            setError(err?.message || 'Не удалось добавить');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const handleDelete = async (id) => {
+        if (!id) return;
+        if (!window.confirm('Удалить интервал?')) return;
+        try {
+            await deleteTeacherTimeSlot(id);
+            await reload();
+        } catch (err) {
+            setError(err?.message || 'Не удалось удалить');
+        }
+    };
+
+    const handleSeed = async () => {
+        if (!teacherId) return;
+        setBusy(true);
+        try {
+            await seedTeacherTimeGridFromDefault(teacherId);
+            await reload();
+        } catch (err) {
+            setError(err?.message || 'Не удалось засеять');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="card modal-content" onClick={(e) => e.stopPropagation()} style={{ width: '480px', maxWidth: '95%', padding: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    <h3 style={{ margin: 0 }}>Сетка времени</h3>
+                    <button onClick={onClose} className="btn btn-ghost" style={{ padding: '4px' }}>
+                        <X size={18} />
+                    </button>
+                </div>
+
+                <p style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', marginBottom: '12px' }}>
+                    Добавьте или удалите интервалы, которые будут отображаться в столбце «Время» слева.
+                    {isFallback && (
+                        <span style={{ display: 'block', marginTop: '6px', color: 'var(--color-warning)' }}>
+                            Сейчас используется стандартная сетка 08:00-22:00. Добавьте первый свой интервал —
+                            старые слоты сохранятся и появятся в редакторе.
+                        </span>
+                    )}
+                </p>
+
+                <form onSubmit={handleAdd} style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', marginBottom: '12px' }}>
+                    <div style={{ flex: 1 }}>
+                        <label className="label">Начало</label>
+                        <input type="time" value={start} onChange={(e) => setStart(e.target.value)} style={{ width: '100%' }} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                        <label className="label">Конец</label>
+                        <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} style={{ width: '100%' }} />
+                    </div>
+                    <button type="submit" className="btn btn-primary" disabled={busy} style={{ padding: '8px 12px' }}>
+                        {busy ? '...' : 'Добавить'}
+                    </button>
+                </form>
+
+                {error && (
+                    <div style={{
+                        padding: '8px 12px', marginBottom: '12px',
+                        borderRadius: 'var(--radius)',
+                        backgroundColor: 'var(--color-danger-bg)',
+                        color: 'var(--color-danger)',
+                        border: '1px solid var(--color-danger-border)',
+                        fontSize: '0.82rem'
+                    }}>
+                        {error}
+                    </div>
+                )}
+
+                <div style={{ maxHeight: '320px', overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 'var(--radius)' }}>
+                    {(grid.length === 0 ? DEFAULT_HOUR_GRID : grid).map((r, i) => (
+                        <div key={r.id || `default-${i}`} style={{
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            padding: '8px 12px',
+                            borderBottom: i < grid.length - 1 ? '1px solid var(--color-divider)' : 'none',
+                            backgroundColor: i % 2 === 0 ? 'transparent' : 'var(--color-bg-tint)',
+                            fontSize: '0.88rem'
+                        }}>
+                            <span>{r.start_time}-{r.end_time}</span>
+                            {r.id ? (
+                                <button
+                                    onClick={() => handleDelete(r.id)}
+                                    title="Удалить"
+                                    style={{
+                                        background: 'none', border: 'none', cursor: 'pointer',
+                                        color: 'var(--color-danger)', padding: '4px',
+                                        display: 'inline-flex', alignItems: 'center'
+                                    }}
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            ) : (
+                                <span style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
+                                    из стандартной
+                                </span>
+                            )}
+                        </div>
+                    ))}
+                </div>
+
+                {isFallback && (
+                    <button
+                        onClick={handleSeed}
+                        className="btn btn-secondary"
+                        disabled={busy}
+                        style={{ width: '100%', marginTop: '12px', padding: '8px' }}
+                        title="Скопировать стандартную сетку в свою — после этого можно удалять отдельные строки"
+                    >
+                        Скопировать стандартную сетку себе
+                    </button>
+                )}
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
+                    <button type="button" onClick={onClose} className="btn btn-secondary">Готово</button>
+                </div>
             </div>
         </div>
     );

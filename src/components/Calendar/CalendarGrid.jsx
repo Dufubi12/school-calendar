@@ -213,18 +213,42 @@ const CalendarGrid = ({ currentDate, viewKind = 'month', onDayClick, substitutio
                                 </>
                             ) : (
                                 (() => {
+                                    // Separate individual lessons (ИЗ / ИМ / ОГЭ / ЕГЭ) — they don't have a className.
+                                    const INDIVIDUAL_KINDS = new Set(['ИЗ', 'ИМ', 'ОГЭ', 'ЕГЭ']);
+                                    let individualCount = 0;
                                     const grouped = {};
                                     dayEvents.forEach(event => {
+                                        if (INDIVIDUAL_KINDS.has(event.lessonKind) || event.type === 'individual') {
+                                            individualCount++;
+                                            return;
+                                        }
                                         const cls = event.className || event.grade || 'Другое';
                                         if (!grouped[cls]) grouped[cls] = { total: 0, subs: 0 };
                                         grouped[cls].total++;
                                         if (event.type === 'substitution') grouped[cls].subs++;
                                     });
                                     const classNames = Object.keys(grouped).sort();
-                                    const maxShow = 5;
+                                    const maxShow = isWeekView ? 8 : 5;
 
                                     return (
                                         <>
+                                            {/* Individuals first — золотистая плашка */}
+                                            {individualCount > 0 && (
+                                                <div style={{
+                                                    fontSize: '0.68rem',
+                                                    padding: '3px 6px',
+                                                    borderRadius: 'var(--radius-sm)',
+                                                    backgroundColor: '#fef3c7',
+                                                    color: '#92400e',
+                                                    borderLeft: '3px solid #fde68a',
+                                                    whiteSpace: 'nowrap',
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis',
+                                                    fontWeight: 500
+                                                }}>
+                                                    👤 <strong>Индив.</strong> — {individualCount}
+                                                </div>
+                                            )}
                                             {classNames.slice(0, maxShow).map(cls => {
                                                 const hasSubs = grouped[cls].subs > 0;
                                                 return (

@@ -324,13 +324,21 @@ export async function deleteInvitation(id) {
 }
 
 // =====================================================================
-// INDIVIDUAL SLOTS (ИЗ) — hourly availability per teacher per day
-// Returns: { teacherLastName: { name, description, slots: { day: { time: 'free'|'busy' } } } }
+// INDIVIDUAL SLOTS (ИЗ) — recurring weekly OR single-date slots
+// Returns: {
+//   teacherLastName: {
+//     teacherId,
+//     name,
+//     description,
+//     slots: { day: { time: 'free'|'busy' } }  // recurring weekly
+//     singleEvents: [ { id, single_date, time_slot, status } ]   // one-off
+//   }
+// }
 // =====================================================================
 export async function loadIndividualSlots(teachers = []) {
     try {
         const [slotsRes, descRes] = await Promise.all([
-            supabase.from('individual_slots').select('teacher_id, day, time_slot, status'),
+            supabase.from('individual_slots').select('id, teacher_id, day, time_slot, status, single_date'),
             supabase.from('individual_slot_descriptions').select('teacher_id, description'),
         ]);
         const result = {};
@@ -338,33 +346,39 @@ export async function loadIndividualSlots(teachers = []) {
         const descByTeacher = {};
         (descRes.data || []).forEach(d => { descByTeacher[d.teacher_id] = d.description; });
 
-        (slotsRes.data || []).forEach(row => {
-            const t = teacherById.get(row.teacher_id);
-            const lastName = t ? t.name.split(' ')[0] : String(row.teacher_id);
+        const ensureEntry = (teacher_id) => {
+            const t = teacherById.get(teacher_id);
+            const lastName = t ? t.name.split(' ')[0] : String(teacher_id);
             if (!result[lastName]) {
                 result[lastName] = {
-                    teacherId: row.teacher_id,
+                    teacherId: teacher_id,
                     name: t ? t.name : lastName,
-                    description: descByTeacher[row.teacher_id] || '',
+                    description: descByTeacher[teacher_id] || '',
                     slots: {},
+                    singleEvents: [],
                 };
             }
-            if (!result[lastName].slots[row.day]) result[lastName].slots[row.day] = {};
-            result[lastName].slots[row.day][row.time_slot] = row.status;
+            return result[lastName];
+        };
+
+        (slotsRes.data || []).forEach(row => {
+            const entry = ensureEntry(row.teacher_id);
+            if (row.single_date) {
+                entry.singleEvents.push({
+                    id: row.id,
+                    single_date: row.single_date,
+                    time_slot: row.time_slot,
+                    status: row.status,
+                });
+            } else {
+                if (!entry.slots[row.day]) entry.slots[row.day] = {};
+                entry.slots[row.day][row.time_slot] = row.status;
+            }
         });
 
-        // Also include teachers who have description but no slots
+        // Teachers with description but no slots
         (descRes.data || []).forEach(d => {
-            const t = teacherById.get(d.teacher_id);
-            const lastName = t ? t.name.split(' ')[0] : String(d.teacher_id);
-            if (!result[lastName]) {
-                result[lastName] = {
-                    teacherId: d.teacher_id,
-                    name: t ? t.name : lastName,
-                    description: d.description || '',
-                    slots: {},
-                };
-            }
+            ensureEntry(d.teacher_id);
         });
 
         return result;
@@ -374,25 +388,79 @@ export async function loadIndividualSlots(teachers = []) {
     }
 }
 
-// Save / clear a single slot status (status=null → delete row)
+// Save / clear a recurring slot. PostgREST cannot upsert against a partial
+// unique index, so we do an explicit select → update-or-insert.
 export async function saveIndividualSlot(teacherId, day, timeSlot, status) {
     if (status === null || status === undefined) {
         const { error } = await supabase
             .from('individual_slots')
             .delete()
-            .match({ teacher_id: teacherId, day, time_slot: timeSlot });
+            .match({ teacher_id: teacherId, day, time_slot: timeSlot })
+            .is('single_date', null);
         if (error) throw error;
         return;
     }
-    const { error } = await supabase
+
+    const { data: existing, error: selErr } = await supabase
         .from('individual_slots')
-        .upsert({
+        .select('id')
+        .eq('teacher_id', teacherId)
+        .eq('day', day)
+        .eq('time_slot', timeSlot)
+        .is('single_date', null)
+        .maybeSingle();
+    if (selErr) throw selErr;
+
+    if (existing) {
+        const { error } = await supabase
+            .from('individual_slots')
+            .update({ status, updated_at: new Date().toISOString() })
+            .eq('id', existing.id);
+        if (error) throw error;
+    } else {
+        const { error } = await supabase
+            .from('individual_slots')
+            .insert({
+                teacher_id: teacherId,
+                day,
+                time_slot: timeSlot,
+                status,
+                single_date: null,
+            });
+        if (error) throw error;
+    }
+}
+
+// Create a single-date one-off event
+export async function createSingleIndividualSlot({ teacherId, date, timeSlot, status = 'busy' }) {
+    const dow = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'][new Date(date + 'T00:00:00').getDay()];
+    const { data, error } = await supabase
+        .from('individual_slots')
+        .insert({
             teacher_id: teacherId,
-            day,
+            day: dow,
             time_slot: timeSlot,
             status,
-            updated_at: new Date().toISOString(),
-        }, { onConflict: 'teacher_id,day,time_slot' });
+            single_date: date,
+        })
+        .select()
+        .single();
+    if (error) throw error;
+    return data;
+}
+
+// Create a recurring slot with arbitrary day/time (used by "+ свой слот")
+// Uses the same select → update-or-insert pattern as saveIndividualSlot
+export async function createRecurringIndividualSlot({ teacherId, day, timeSlot, status = 'busy' }) {
+    return saveIndividualSlot(teacherId, day, timeSlot, status);
+}
+
+// Delete a single event by id
+export async function deleteIndividualSlot(id) {
+    const { error } = await supabase
+        .from('individual_slots')
+        .delete()
+        .eq('id', id);
     if (error) throw error;
 }
 

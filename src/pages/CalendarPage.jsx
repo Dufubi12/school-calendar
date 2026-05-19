@@ -107,17 +107,17 @@ const CalendarPage = () => {
         Object.entries(izSlots).forEach(([lastName, data]) => {
             const tIdNum = data?.teacherId;
             const fullName = data?.name || lastName;
+
+            // 2a) Recurring weekly busy slots
             Object.entries(data?.slots || {}).forEach(([day, timeMap]) => {
                 const dow = dayCodeToWeekday[day];
                 if (dow === undefined) return;
                 Object.entries(timeMap).forEach(([timeKey, status]) => {
                     if (status !== 'busy') return;
                     const [startTime, endTime] = timeKey.split('-');
-                    // generate all dates in [monthStart..monthEnd] with this dow
                     const cur = new Date(monthStart);
                     while (cur.getDay() !== dow) cur.setDate(cur.getDate() + 1);
                     while (cur <= monthEnd) {
-                        // Local-date formatting (avoid timezone shift from toISOString)
                         const dateStr = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
                         izEvents.push({
                             id: `iz-${tIdNum}-${dateStr}-${timeKey}`,
@@ -135,6 +135,26 @@ const CalendarPage = () => {
                         });
                         cur.setDate(cur.getDate() + 7);
                     }
+                });
+            });
+
+            // 2b) Single-date events
+            (data?.singleEvents || []).forEach(ev => {
+                if (ev.status !== 'busy') return;
+                const [startTime, endTime] = (ev.time_slot || '').split('-');
+                izEvents.push({
+                    id: `iz-single-${ev.id}`,
+                    type: 'individual',
+                    date: ev.single_date,
+                    startTime, endTime,
+                    time: ev.time_slot,
+                    subject: 'Индивид. (разово)',
+                    grade: '',
+                    className: '',
+                    teacher: lastName,
+                    teacherName: fullName,
+                    lessonKind: 'ИЗ',
+                    details: `ИЗ (разово): ${fullName}`
                 });
             });
         });

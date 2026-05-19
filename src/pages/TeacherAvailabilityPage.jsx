@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useSchedule } from '../context/ScheduleContext';
 import { useAuth } from '../context/AuthContext';
-import { CalendarClock, Check, X, Pencil, Plus, Trash2, RotateCcw, Save } from 'lucide-react';
+import { CalendarClock, Check, X } from 'lucide-react';
 import { loadAvailability, saveAvailability } from '../lib/api';
 
 const WEEKDAYS = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
@@ -12,27 +12,6 @@ const NEXT_STATE = {
     'default': 'free',
     'free': 'busy',
     'busy': 'default'
-};
-
-const TIMESLOTS_STORAGE_KEY = 'school_calendar_teacher_timeslots';
-
-// Load all teachers' custom timeslots from localStorage
-const loadAllCustomTimeslots = () => {
-    try {
-        const raw = localStorage.getItem(TIMESLOTS_STORAGE_KEY);
-        if (!raw) return {};
-        return JSON.parse(raw) || {};
-    } catch {
-        return {};
-    }
-};
-
-const saveAllCustomTimeslots = (data) => {
-    try {
-        localStorage.setItem(TIMESLOTS_STORAGE_KEY, JSON.stringify(data));
-    } catch (err) {
-        console.error('Failed to save custom timeslots', err);
-    }
 };
 
 const TeacherAvailabilityPage = () => {
@@ -88,84 +67,15 @@ const TeacherAvailabilityPage = () => {
         }
     }, [isTeacher, currentUser]);
 
-    // Per-teacher custom time slots (override bell schedule)
-    const [allCustomTimeslots, setAllCustomTimeslots] = useState(() => loadAllCustomTimeslots());
-    const [editingSlots, setEditingSlots] = useState(false);
-    const [draftSlots, setDraftSlots] = useState(null);
-
-    // Build the time-slot list: custom slots for this teacher if present, else bell schedule
+    // Time slots come from bell schedule only (custom editing moved to "Инд. занятия")
     const timeSlots = useMemo(() => {
-        const tid = String(selectedTeacherId || '');
-        const custom = allCustomTimeslots[tid];
-        const source = (custom && Array.isArray(custom) && custom.length > 0)
-            ? custom
-            : bellSchedule.map(b => ({
-                label: b.label,
-                startTime: b.startTime,
-                endTime: b.endTime
-            }));
-
-        return source.map(s => ({
-            key: `${s.startTime}-${s.endTime}`,
-            label: s.label,
-            startTime: s.startTime,
-            endTime: s.endTime
+        return bellSchedule.map(b => ({
+            key: `${b.startTime}-${b.endTime}`,
+            label: b.label,
+            startTime: b.startTime,
+            endTime: b.endTime
         }));
-    }, [bellSchedule, allCustomTimeslots, selectedTeacherId]);
-
-    const hasCustomSlots = useMemo(() => {
-        const tid = String(selectedTeacherId || '');
-        return !!(allCustomTimeslots[tid] && allCustomTimeslots[tid].length > 0);
-    }, [allCustomTimeslots, selectedTeacherId]);
-
-    const startEditingSlots = useCallback(() => {
-        setDraftSlots(timeSlots.map(s => ({ ...s })));
-        setEditingSlots(true);
-    }, [timeSlots]);
-
-    const cancelEditingSlots = useCallback(() => {
-        setDraftSlots(null);
-        setEditingSlots(false);
-    }, []);
-
-    const updateDraftSlot = useCallback((idx, field, value) => {
-        setDraftSlots(prev => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s));
-    }, []);
-
-    const addDraftSlot = useCallback(() => {
-        setDraftSlots(prev => [
-            ...prev,
-            { label: `Слот ${prev.length + 1}`, startTime: '15:00', endTime: '15:45' }
-        ]);
-    }, []);
-
-    const removeDraftSlot = useCallback((idx) => {
-        setDraftSlots(prev => prev.filter((_, i) => i !== idx));
-    }, []);
-
-    const saveSlots = useCallback(() => {
-        if (!selectedTeacherId || !draftSlots) return;
-        const tid = String(selectedTeacherId);
-        const cleaned = draftSlots
-            .filter(s => s.startTime && s.endTime && s.label)
-            .map(s => ({ label: s.label, startTime: s.startTime, endTime: s.endTime }));
-        const next = { ...allCustomTimeslots, [tid]: cleaned };
-        setAllCustomTimeslots(next);
-        saveAllCustomTimeslots(next);
-        setEditingSlots(false);
-        setDraftSlots(null);
-    }, [selectedTeacherId, draftSlots, allCustomTimeslots]);
-
-    const resetSlotsToDefault = useCallback(() => {
-        if (!selectedTeacherId) return;
-        const tid = String(selectedTeacherId);
-        const next = { ...allCustomTimeslots };
-        delete next[tid];
-        setAllCustomTimeslots(next);
-        saveAllCustomTimeslots(next);
-        setEditingSlots(false);
-        setDraftSlots(null);
-    }, [selectedTeacherId, allCustomTimeslots]);
+    }, [bellSchedule]);
 
     const selectedTeacher = useMemo(
         () => teachers.find(t => t.id === Number(selectedTeacherId)),
@@ -386,159 +296,14 @@ const TeacherAvailabilityPage = () => {
             </div>
 
             {/* Helper hint for teachers */}
-            {!readOnly && selectedTeacher && !editingSlots && (
+            {!readOnly && selectedTeacher && (
                 <div style={{
                     marginBottom: '1rem', padding: '10px 14px',
                     borderRadius: '8px', backgroundColor: 'var(--color-moss-tint)',
                     border: '1px solid var(--color-sage)', color: 'var(--color-primary-deep)',
-                    fontSize: '0.85rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    flexWrap: 'wrap',
-                    gap: '0.5rem'
+                    fontSize: '0.85rem'
                 }}>
-                    <span>
-                        Кликайте по ячейкам: «—» → «Свободно» → «Занят» → «—». Изменения сохраняются автоматически.
-                        {hasCustomSlots && <span style={{ marginLeft: '0.5rem', fontStyle: 'italic' }}>(используются ваши слоты)</span>}
-                    </span>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                        <button
-                            onClick={startEditingSlots}
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: '4px',
-                                padding: '6px 12px', borderRadius: '6px',
-                                border: '1px solid var(--color-primary)', backgroundColor: '#fff',
-                                color: 'var(--color-primary)', cursor: 'pointer', fontSize: '0.8rem',
-                                fontWeight: 500
-                            }}
-                        >
-                            <Pencil size={14} />
-                            Редактировать слоты
-                        </button>
-                        {hasCustomSlots && (
-                            <button
-                                onClick={resetSlotsToDefault}
-                                style={{
-                                    display: 'flex', alignItems: 'center', gap: '4px',
-                                    padding: '6px 12px', borderRadius: '6px',
-                                    border: '1px solid #d1d5db', backgroundColor: '#fff',
-                                    color: '#6b7280', cursor: 'pointer', fontSize: '0.8rem',
-                                    fontWeight: 500
-                                }}
-                                title="Сбросить к расписанию звонков"
-                            >
-                                <RotateCcw size={14} />
-                                Сброс
-                            </button>
-                        )}
-                    </div>
-                </div>
-            )}
-
-            {/* Edit mode panel */}
-            {!readOnly && editingSlots && draftSlots && (
-                <div className="card" style={{ marginBottom: '1rem', padding: '1rem' }}>
-                    <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: '0.75rem'
-                    }}>
-                        <h3 style={{ margin: 0, fontSize: '1rem' }}>Редактирование временных слотов</h3>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                            <button
-                                onClick={cancelEditingSlots}
-                                style={{
-                                    padding: '6px 14px', borderRadius: '6px',
-                                    border: '1px solid #d1d5db', backgroundColor: '#fff',
-                                    color: '#6b7280', cursor: 'pointer', fontSize: '0.85rem'
-                                }}
-                            >
-                                Отмена
-                            </button>
-                            <button
-                                onClick={saveSlots}
-                                style={{
-                                    display: 'flex', alignItems: 'center', gap: '4px',
-                                    padding: '6px 14px', borderRadius: '6px',
-                                    border: 'none', backgroundColor: '#10b981',
-                                    color: '#fff', cursor: 'pointer', fontSize: '0.85rem',
-                                    fontWeight: 500
-                                }}
-                            >
-                                <Save size={14} />
-                                Сохранить
-                            </button>
-                        </div>
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        {draftSlots.map((slot, idx) => (
-                            <div key={idx} style={{
-                                display: 'flex', alignItems: 'center', gap: '8px',
-                                padding: '8px', borderRadius: '6px',
-                                backgroundColor: '#f8fafc'
-                            }}>
-                                <span style={{ width: '20px', fontSize: '0.85rem', color: '#6b7280' }}>{idx + 1}.</span>
-                                <input
-                                    type="text"
-                                    value={slot.label}
-                                    onChange={e => updateDraftSlot(idx, 'label', e.target.value)}
-                                    placeholder="Название"
-                                    style={{
-                                        flex: 1, padding: '6px 10px', borderRadius: '6px',
-                                        border: '1px solid #d1d5db', fontSize: '0.9rem',
-                                        minWidth: '120px'
-                                    }}
-                                />
-                                <input
-                                    type="time"
-                                    value={slot.startTime}
-                                    onChange={e => updateDraftSlot(idx, 'startTime', e.target.value)}
-                                    style={{
-                                        padding: '6px 10px', borderRadius: '6px',
-                                        border: '1px solid #d1d5db', fontSize: '0.9rem',
-                                        width: '110px'
-                                    }}
-                                />
-                                <span>—</span>
-                                <input
-                                    type="time"
-                                    value={slot.endTime}
-                                    onChange={e => updateDraftSlot(idx, 'endTime', e.target.value)}
-                                    style={{
-                                        padding: '6px 10px', borderRadius: '6px',
-                                        border: '1px solid #d1d5db', fontSize: '0.9rem',
-                                        width: '110px'
-                                    }}
-                                />
-                                <button
-                                    onClick={() => removeDraftSlot(idx)}
-                                    style={{
-                                        background: 'none', border: 'none', cursor: 'pointer',
-                                        color: '#ef4444', padding: '4px'
-                                    }}
-                                    title="Удалить"
-                                >
-                                    <Trash2 size={16} />
-                                </button>
-                            </div>
-                        ))}
-                        <button
-                            onClick={addDraftSlot}
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: '4px',
-                                justifyContent: 'center',
-                                padding: '8px', borderRadius: '6px',
-                                border: '1px dashed #d1d5db', backgroundColor: 'transparent',
-                                color: '#6b7280', cursor: 'pointer', fontSize: '0.85rem'
-                            }}
-                        >
-                            <Plus size={14} />
-                            Добавить слот
-                        </button>
-                    </div>
+                    Кликайте по ячейкам: «—» → «Свободно» → «Занят» → «—». Изменения сохраняются автоматически.
                 </div>
             )}
 

@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSchedule } from '../context/ScheduleContext';
-import { GraduationCap, Check, X, Info } from 'lucide-react';
-import { loadIndividualSlots, saveIndividualSlot } from '../lib/api';
+import { GraduationCap, Check, X, Info, Plus, Trash2 } from 'lucide-react';
+import { loadIndividualSlots, saveIndividualSlot, createSingleIndividualSlot, createRecurringIndividualSlot, deleteIndividualSlot } from '../lib/api';
 
 // Day codes used in the source CSV and storage
 const DAYS = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
@@ -29,6 +29,7 @@ const IndividualSlotsPage = () => {
     // Load slots from Supabase on mount
     const [slotsByTeacher, setSlotsByTeacher] = useState({});
     const [loading, setLoading] = useState(true);
+    const [showAddModal, setShowAddModal] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -148,6 +149,49 @@ const IndividualSlotsPage = () => {
             setSlotsByTeacher(prevState);
         }
     }, [readOnly, selectedTeacherKey, slotsByTeacher, teachers]);
+
+    // Reload slots from Supabase (used after add/delete via modal)
+    const reloadSlots = useCallback(async () => {
+        try {
+            const data = await loadIndividualSlots(teachers);
+            setSlotsByTeacher(data || {});
+        } catch (err) {
+            console.error('Failed to reload IZ slots', err);
+        }
+    }, [teachers]);
+
+    // Add a custom slot (recurring weekly or single-date)
+    const handleAddSlot = useCallback(async ({ recurring, day, date, startTime, endTime }) => {
+        if (!selectedTeacherKey) return;
+        const teacher = slotsByTeacher[selectedTeacherKey];
+        const teacherId = teacher?.teacherId
+            || teachers.find(t => t.name.split(' ')[0] === selectedTeacherKey)?.id;
+        if (!teacherId) return;
+        const timeSlot = `${startTime}-${endTime}`;
+        try {
+            if (recurring) {
+                await createRecurringIndividualSlot({ teacherId, day, timeSlot, status: 'busy' });
+            } else {
+                await createSingleIndividualSlot({ teacherId, date, timeSlot, status: 'busy' });
+            }
+            await reloadSlots();
+            setShowAddModal(false);
+        } catch (err) {
+            console.error('Failed to add slot', err);
+            alert('Не удалось добавить слот: ' + (err?.message || 'неизвестная ошибка'));
+        }
+    }, [selectedTeacherKey, slotsByTeacher, teachers, reloadSlots]);
+
+    // Delete a single-date slot by id
+    const handleDeleteSingle = useCallback(async (id) => {
+        if (!window.confirm('Удалить это разовое занятие?')) return;
+        try {
+            await deleteIndividualSlot(id);
+            await reloadSlots();
+        } catch (err) {
+            console.error('Failed to delete slot', err);
+        }
+    }, [reloadSlots]);
 
     const totalSlotsForTeacher = (key) => {
         const t = slotsByTeacher[key];
@@ -291,7 +335,16 @@ const IndividualSlotsPage = () => {
                                             </div>
                                         )}
                                     </div>
-                                    <div style={{ display: 'flex', gap: '8px', fontSize: '0.75rem', flexWrap: 'wrap' }}>
+                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '0.75rem', flexWrap: 'wrap' }}>
+                                        {!readOnly && (
+                                            <button
+                                                onClick={() => setShowAddModal(true)}
+                                                className="btn btn-primary"
+                                                style={{ padding: '6px 12px', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                            >
+                                                <Plus size={14} /> Свой слот
+                                            </button>
+                                        )}
                                         <span style={{ padding: '3px 8px', borderRadius: '4px', backgroundColor: '#f0fdf4', color: '#059669', border: '1px solid #d1fae5' }}>
                                             <Check size={11} style={{ verticalAlign: 'middle' }} /> Свободно
                                         </span>
@@ -300,6 +353,47 @@ const IndividualSlotsPage = () => {
                                         </span>
                                     </div>
                                 </div>
+
+                                {/* List of single-date events */}
+                                {selected.singleEvents && selected.singleEvents.length > 0 && (
+                                    <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--color-divider)' }}>
+                                        <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                            Разовые занятия:
+                                        </div>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                            {selected.singleEvents
+                                                .slice()
+                                                .sort((a, b) => (a.single_date + a.time_slot).localeCompare(b.single_date + b.time_slot))
+                                                .map(ev => (
+                                                    <span key={ev.id} style={{
+                                                        display: 'inline-flex', alignItems: 'center', gap: '6px',
+                                                        padding: '5px 10px',
+                                                        borderRadius: 'var(--radius-pill)',
+                                                        backgroundColor: ev.status === 'busy' ? 'var(--color-danger-bg)' : 'var(--color-success-bg)',
+                                                        color: ev.status === 'busy' ? 'var(--color-danger)' : 'var(--color-success)',
+                                                        border: `1px solid ${ev.status === 'busy' ? 'var(--color-danger-border)' : 'var(--color-success-border)'}`,
+                                                        fontSize: '0.78rem',
+                                                        fontWeight: 500
+                                                    }}>
+                                                        📅 {new Date(ev.single_date + 'T00:00:00').toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })} · {ev.time_slot}
+                                                        {!readOnly && (
+                                                            <button
+                                                                onClick={() => handleDeleteSingle(ev.id)}
+                                                                style={{
+                                                                    background: 'none', border: 'none', cursor: 'pointer',
+                                                                    padding: 0, color: 'inherit', opacity: 0.6,
+                                                                    display: 'inline-flex', alignItems: 'center'
+                                                                }}
+                                                                title="Удалить"
+                                                            >
+                                                                <Trash2 size={12} />
+                                                            </button>
+                                                        )}
+                                                    </span>
+                                                ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
@@ -357,6 +451,117 @@ const IndividualSlotsPage = () => {
                         </>
                     )}
                 </div>
+            </div>
+
+            {showAddModal && (
+                <AddSlotModal
+                    onClose={() => setShowAddModal(false)}
+                    onSubmit={handleAddSlot}
+                />
+            )}
+        </div>
+    );
+};
+
+// ===== Add Slot Modal =====
+const AddSlotModal = ({ onClose, onSubmit }) => {
+    const [recurring, setRecurring] = useState(true);
+    const [day, setDay] = useState('пн');
+    const [date, setDate] = useState(() => {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    });
+    const [startTime, setStartTime] = useState('16:00');
+    const [endTime, setEndTime] = useState('17:00');
+    const [submitting, setSubmitting] = useState(false);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (submitting) return;
+        if (!startTime || !endTime || startTime >= endTime) {
+            alert('Введите корректное время начала и окончания');
+            return;
+        }
+        setSubmitting(true);
+        try {
+            await onSubmit({ recurring, day, date, startTime, endTime });
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="card modal-content" onClick={(e) => e.stopPropagation()} style={{ width: '420px', maxWidth: '95%', padding: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    <h3 style={{ margin: 0 }}>Добавить слот</h3>
+                    <button onClick={onClose} className="btn btn-ghost" style={{ padding: '4px' }}>
+                        <X size={18} />
+                    </button>
+                </div>
+
+                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {/* Recurring vs single */}
+                    <div>
+                        <label className="label">Тип</label>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                            <button
+                                type="button"
+                                onClick={() => setRecurring(true)}
+                                className={recurring ? 'btn btn-primary' : 'btn btn-secondary'}
+                                style={{ flex: 1, padding: '8px 12px', fontSize: '0.85rem' }}
+                            >
+                                🔁 Каждую неделю
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setRecurring(false)}
+                                className={!recurring ? 'btn btn-primary' : 'btn btn-secondary'}
+                                style={{ flex: 1, padding: '8px 12px', fontSize: '0.85rem' }}
+                            >
+                                📅 Разово
+                            </button>
+                        </div>
+                    </div>
+
+                    {recurring ? (
+                        <div>
+                            <label className="label">День недели</label>
+                            <select value={day} onChange={(e) => setDay(e.target.value)}>
+                                <option value="пн">Понедельник</option>
+                                <option value="вт">Вторник</option>
+                                <option value="ср">Среда</option>
+                                <option value="чт">Четверг</option>
+                                <option value="пт">Пятница</option>
+                                <option value="сб">Суббота</option>
+                                <option value="вс">Воскресенье</option>
+                            </select>
+                        </div>
+                    ) : (
+                        <div>
+                            <label className="label">Дата</label>
+                            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                        </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                        <div style={{ flex: 1 }}>
+                            <label className="label">Начало</label>
+                            <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                            <label className="label">Конец</label>
+                            <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '4px' }}>
+                        <button type="button" onClick={onClose} className="btn btn-secondary">Отмена</button>
+                        <button type="submit" className="btn btn-primary" disabled={submitting}>
+                            {submitting ? 'Добавление…' : 'Добавить'}
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     );

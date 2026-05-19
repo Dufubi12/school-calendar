@@ -390,6 +390,23 @@ export async function deleteInvitation(id) {
 //   }
 // }
 // =====================================================================
+// Given a slotsByTeacher entry (output of loadIndividualSlots) + date,
+// return active recurring slot status for (day, time) on that date.
+// Honors effective_from / effective_to versioning.
+// Returns 'busy' | 'free' | null
+export function getSlotStatusForDate(teacherEntry, day, timeSlot, dateStr) {
+    if (!teacherEntry || !teacherEntry.recurringVersions) return null;
+    const candidates = teacherEntry.recurringVersions.filter(v =>
+        v.day === day && v.time_slot === timeSlot
+    );
+    for (const v of candidates) {
+        if (v.effective_from && dateStr < v.effective_from) continue;
+        if (v.effective_to && dateStr > v.effective_to) continue;
+        return v.status;
+    }
+    return null;
+}
+
 // Count distinct teachers whose IZ slots were updated within the last `hours` hours.
 // Used by Layout to render the admin's "recent changes" badge on /individual-slots.
 export async function countRecentIzChanges(hours = 24) {
@@ -409,7 +426,7 @@ export async function countRecentIzChanges(hours = 24) {
 export async function loadIndividualSlots(teachers = []) {
     try {
         const [slotsRes, descRes] = await Promise.all([
-            supabase.from('individual_slots').select('id, teacher_id, day, time_slot, status, single_date, approval_status, approval_note, approved_at'),
+            supabase.from('individual_slots').select('id, teacher_id, day, time_slot, status, single_date, approval_status, approval_note, approved_at, effective_from, effective_to'),
             supabase.from('individual_slot_descriptions').select('teacher_id, description'),
         ]);
         const result = {};
@@ -425,12 +442,23 @@ export async function loadIndividualSlots(teachers = []) {
                     teacherId: teacher_id,
                     name: t ? t.name : lastName,
                     description: descByTeacher[teacher_id] || '',
-                    slots: {},
-                    slotMeta: {}, // { day: { time: { id, approval_status, approval_note } } }
+                    slots: {},          // { day: { time: status } } — current active version
+                    slotMeta: {},       // { day: { time: { id, approval_status, effective_from, effective_to } } }
+                    recurringVersions: [], // all versions: { id, day, time_slot, status, approval_status, effective_from, effective_to }
                     singleEvents: [],
                 };
             }
             return result[lastName];
+        };
+
+        const today = (() => {
+            const d = new Date();
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        })();
+        const isActiveOnDate = (row, dateStr) => {
+            if (row.effective_from && dateStr < row.effective_from) return false;
+            if (row.effective_to && dateStr > row.effective_to) return false;
+            return true;
         };
 
         (slotsRes.data || []).forEach(row => {
@@ -445,14 +473,29 @@ export async function loadIndividualSlots(teachers = []) {
                     approval_note: row.approval_note || null,
                 });
             } else {
-                if (!entry.slots[row.day]) entry.slots[row.day] = {};
-                if (!entry.slotMeta[row.day]) entry.slotMeta[row.day] = {};
-                entry.slots[row.day][row.time_slot] = row.status;
-                entry.slotMeta[row.day][row.time_slot] = {
+                entry.recurringVersions.push({
                     id: row.id,
+                    day: row.day,
+                    time_slot: row.time_slot,
+                    status: row.status,
                     approval_status: row.approval_status || 'approved',
                     approval_note: row.approval_note || null,
-                };
+                    effective_from: row.effective_from || null,
+                    effective_to: row.effective_to || null,
+                });
+                // For UI: pick the version active TODAY (so cells show current value)
+                if (isActiveOnDate(row, today)) {
+                    if (!entry.slots[row.day]) entry.slots[row.day] = {};
+                    if (!entry.slotMeta[row.day]) entry.slotMeta[row.day] = {};
+                    entry.slots[row.day][row.time_slot] = row.status;
+                    entry.slotMeta[row.day][row.time_slot] = {
+                        id: row.id,
+                        approval_status: row.approval_status || 'approved',
+                        approval_note: row.approval_note || null,
+                        effective_from: row.effective_from || null,
+                        effective_to: row.effective_to || null,
+                    };
+                }
             }
         });
 
@@ -468,45 +511,60 @@ export async function loadIndividualSlots(teachers = []) {
     }
 }
 
-// Save / clear a recurring slot. PostgREST cannot upsert against a partial
-// unique index, so we do an explicit select → update-or-insert.
-// `byAdmin=true` marks the change as already approved (no admin moderation needed).
+// Save / clear a recurring slot with VERSIONING.
+// On change: close current open version (effective_to = yesterday) and insert
+// a new open version (effective_from = today, effective_to = null).
+// On delete: just close the current open version — keep history.
+// `byAdmin=true` marks the new version as already approved.
 export async function saveIndividualSlot(teacherId, day, timeSlot, status, byAdmin = false) {
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+
+    // Find current OPEN version (effective_to IS NULL) for this slot
+    const { data: openRows, error: selErr } = await supabase
+        .from('individual_slots')
+        .select('id, status, effective_from')
+        .eq('teacher_id', teacherId)
+        .eq('day', day)
+        .eq('time_slot', timeSlot)
+        .is('single_date', null)
+        .is('effective_to', null);
+    if (selErr) throw selErr;
+    const openVersion = (openRows && openRows[0]) || null;
+
+    // === Delete (status=null) ===
     if (status === null || status === undefined) {
-        const { error } = await supabase
-            .from('individual_slots')
-            .delete()
-            .match({ teacher_id: teacherId, day, time_slot: timeSlot })
-            .is('single_date', null);
-        if (error) throw error;
+        if (openVersion) {
+            // If this version started today and has no history before it — safe to hard delete
+            // (avoids creating phantom 1-day records when teacher toggles ON then OFF quickly)
+            if (openVersion.effective_from === todayStr) {
+                const { error } = await supabase
+                    .from('individual_slots')
+                    .delete()
+                    .eq('id', openVersion.id);
+                if (error) throw error;
+            } else {
+                // Close it: keep history, mark effective_to = yesterday
+                const { error } = await supabase
+                    .from('individual_slots')
+                    .update({
+                        effective_to: yesterdayStr,
+                        updated_at: new Date().toISOString(),
+                    })
+                    .eq('id', openVersion.id);
+                if (error) throw error;
+            }
+        }
         return;
     }
 
     const approval_status = byAdmin ? 'approved' : 'pending';
 
-    const { data: existing, error: selErr } = await supabase
-        .from('individual_slots')
-        .select('id')
-        .eq('teacher_id', teacherId)
-        .eq('day', day)
-        .eq('time_slot', timeSlot)
-        .is('single_date', null)
-        .maybeSingle();
-    if (selErr) throw selErr;
-
-    if (existing) {
-        const { error } = await supabase
-            .from('individual_slots')
-            .update({
-                status,
-                approval_status,
-                approval_note: null,
-                approved_at: byAdmin ? new Date().toISOString() : null,
-                updated_at: new Date().toISOString(),
-            })
-            .eq('id', existing.id);
-        if (error) throw error;
-    } else {
+    // No open version yet — just insert new open version
+    if (!openVersion) {
         const { error } = await supabase
             .from('individual_slots')
             .insert({
@@ -517,9 +575,71 @@ export async function saveIndividualSlot(teacherId, day, timeSlot, status, byAdm
                 single_date: null,
                 approval_status,
                 approved_at: byAdmin ? new Date().toISOString() : null,
+                effective_from: todayStr,
+                effective_to: null,
             });
         if (error) throw error;
+        return;
     }
+
+    // Same status as current open version — refresh approval only (admin re-approve etc.)
+    if (openVersion.status === status) {
+        const { error } = await supabase
+            .from('individual_slots')
+            .update({
+                approval_status,
+                approval_note: null,
+                approved_at: byAdmin ? new Date().toISOString() : null,
+                updated_at: new Date().toISOString(),
+            })
+            .eq('id', openVersion.id);
+        if (error) throw error;
+        return;
+    }
+
+    // Status changed — version it
+    // If the open version also started today, just overwrite it in place
+    // (avoids 1-day phantom version when toggling within the same day)
+    if (openVersion.effective_from === todayStr) {
+        const { error } = await supabase
+            .from('individual_slots')
+            .update({
+                status,
+                approval_status,
+                approval_note: null,
+                approved_at: byAdmin ? new Date().toISOString() : null,
+                updated_at: new Date().toISOString(),
+            })
+            .eq('id', openVersion.id);
+        if (error) throw error;
+        return;
+    }
+
+    // Close old version
+    const { error: closeErr } = await supabase
+        .from('individual_slots')
+        .update({
+            effective_to: yesterdayStr,
+            updated_at: new Date().toISOString(),
+        })
+        .eq('id', openVersion.id);
+    if (closeErr) throw closeErr;
+
+    // Open new version with new status starting today
+    const { error: insErr } = await supabase
+        .from('individual_slots')
+        .insert({
+            teacher_id: teacherId,
+            day,
+            time_slot: timeSlot,
+            status,
+            single_date: null,
+            approval_status,
+            approved_at: byAdmin ? new Date().toISOString() : null,
+            effective_from: todayStr,
+            effective_to: null,
+        });
+    if (insErr) throw insErr;
 }
 
 // Create a single-date one-off event
@@ -536,6 +656,8 @@ export async function createSingleIndividualSlot({ teacherId, date, timeSlot, st
             single_date: date,
             approval_status,
             approved_at: byAdmin ? new Date().toISOString() : null,
+            effective_from: date,
+            effective_to: date,
         })
         .select()
         .single();

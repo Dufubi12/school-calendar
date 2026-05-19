@@ -404,13 +404,19 @@ const CreateInvitationModal = ({ teachers, bellSchedule, existingInvitations, on
             issues.push(`Уже есть приглашение на этот слот${pat} (статус: ${taken.status === 'accepted' ? 'принято' : 'ожидает'})`);
         }
 
-        // 4) ИЗ-слоты педагога (recurring weekly + single-date)
+        // 4) ИЗ-слоты педагога (recurring weekly versioned + single-date)
         const izEntry = izSlots[lastName];
         if (izEntry) {
             const dowCode = DOW_CODES[new Date(date + 'T00:00:00').getDay()];
-            // Recurring busy slot on this day-of-week at this time
-            const recurStatus = izEntry.slots?.[dowCode]?.[time];
-            if (recurStatus === 'busy') {
+            // Recurring busy slot: walk versions, check effective range
+            const matchingVersion = (izEntry.recurringVersions || []).find(v =>
+                v.day === dowCode
+                && v.time_slot === time
+                && v.status === 'busy'
+                && (!v.effective_from || date >= v.effective_from)
+                && (!v.effective_to || date <= v.effective_to)
+            );
+            if (matchingVersion) {
                 issues.push(`Педагог занят (ИЗ постоянный слот ${dowCode} ${time})`);
             }
             // One-off busy event on this exact date

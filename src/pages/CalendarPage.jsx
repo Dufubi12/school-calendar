@@ -126,34 +126,45 @@ const CalendarPage = () => {
             const tIdNum = data?.teacherId;
             const fullName = data?.name || lastName;
 
-            // 2a) Recurring weekly busy slots
-            Object.entries(data?.slots || {}).forEach(([day, timeMap]) => {
-                const dow = dayCodeToWeekday[day];
+            // 2a) Recurring weekly busy slots — versioned with effective_from/effective_to.
+            // For each version, expand only across its active date range intersected with visible window.
+            (data?.recurringVersions || []).forEach(version => {
+                if (version.status !== 'busy') return;
+                const dow = dayCodeToWeekday[version.day];
                 if (dow === undefined) return;
-                Object.entries(timeMap).forEach(([timeKey, status]) => {
-                    if (status !== 'busy') return;
-                    const [startTime, endTime] = timeKey.split('-');
-                    const cur = new Date(monthStart);
-                    while (cur.getDay() !== dow) cur.setDate(cur.getDate() + 1);
-                    while (cur <= monthEnd) {
-                        const dateStr = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
-                        izEvents.push({
-                            id: `iz-${tIdNum}-${dateStr}-${timeKey}`,
-                            type: 'individual',
-                            date: dateStr,
-                            startTime, endTime,
-                            time: timeKey,
-                            subject: 'Индивид.',
-                            grade: '',
-                            className: '',
-                            teacher: lastName,
-                            teacherName: fullName,
-                            lessonKind: 'ИЗ',
-                            details: `ИЗ: ${fullName}`
-                        });
-                        cur.setDate(cur.getDate() + 7);
-                    }
-                });
+                const [startTime, endTime] = version.time_slot.split('-');
+                // Effective window for this version
+                const versionFrom = version.effective_from
+                    ? new Date(version.effective_from + 'T00:00:00')
+                    : monthStart;
+                const versionTo = version.effective_to
+                    ? new Date(version.effective_to + 'T00:00:00')
+                    : monthEnd;
+                // Clip to visible window
+                const winStart = versionFrom > monthStart ? versionFrom : monthStart;
+                const winEnd = versionTo < monthEnd ? versionTo : monthEnd;
+                if (winStart > winEnd) return;
+                // Walk through dates matching dow
+                const cur = new Date(winStart);
+                while (cur.getDay() !== dow) cur.setDate(cur.getDate() + 1);
+                while (cur <= winEnd) {
+                    const dateStr = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+                    izEvents.push({
+                        id: `iz-${tIdNum}-${dateStr}-${version.time_slot}-${version.id}`,
+                        type: 'individual',
+                        date: dateStr,
+                        startTime, endTime,
+                        time: version.time_slot,
+                        subject: 'Индивид.',
+                        grade: '',
+                        className: '',
+                        teacher: lastName,
+                        teacherName: fullName,
+                        lessonKind: 'ИЗ',
+                        details: `ИЗ: ${fullName}`
+                    });
+                    cur.setDate(cur.getDate() + 7);
+                }
             });
 
             // 2b) Single-date events

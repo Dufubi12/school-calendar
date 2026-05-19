@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { INITIAL_SUBSTITUTIONS, TEACHERS as MOCK_DATA_TEACHERS, REAL_SCHEDULE } from '../data/mockData';
+import { INITIAL_SUBSTITUTIONS, TEACHERS as MOCK_DATA_TEACHERS, REAL_SCHEDULE as REAL_SCHEDULE_FALLBACK } from '../data/mockData';
+import { loadSchoolLessons, buildScheduleWeekly } from '../lib/api';
 import {
     calculateWorkload,
     findConflicts,
@@ -55,7 +56,7 @@ const convertRealScheduleToTimeSlots = () => {
     const endDate = new Date(2026, 5, 30); // 30 июня 2026
 
     // Для каждого класса
-    Object.entries(REAL_SCHEDULE).forEach(([className, days]) => {
+    Object.entries(REAL_SCHEDULE_FALLBACK).forEach(([className, days]) => {
         // Для каждого дня недели
         Object.entries(days).forEach(([dayName, lessons]) => {
             const targetDayNumber = dayNameToNumber[dayName];
@@ -122,7 +123,7 @@ const convertRealScheduleToEvents = () => {
     const endDate = new Date(2026, 5, 30); // 30 июня 2026
 
     // Для каждого класса
-    Object.entries(REAL_SCHEDULE).forEach(([className, days]) => {
+    Object.entries(REAL_SCHEDULE_FALLBACK).forEach(([className, days]) => {
         // Для каждого дня недели
         Object.entries(days).forEach(([dayName, lessons]) => {
             const targetDayNumber = dayNameToNumber[dayName];
@@ -237,7 +238,7 @@ export const ScheduleProvider = ({ children }) => {
             'Воскресенье': 0
         };
 
-        Object.entries(REAL_SCHEDULE).forEach(([className, days]) => {
+        Object.entries(REAL_SCHEDULE_FALLBACK).forEach(([className, days]) => {
             Object.entries(days).forEach(([dayName, lessons]) => {
                 const targetDayNumber = dayNameToNumber[dayName];
                 let currentDate = new Date(startDate);
@@ -374,7 +375,7 @@ export const ScheduleProvider = ({ children }) => {
         const dayName = numberToDayName[dayNumber];
         let slotId = parseInt(dateStr.replace(/-/g, '')) * 1000; // Уникальный ID на основе даты
 
-        Object.entries(REAL_SCHEDULE).forEach(([className, days]) => {
+        Object.entries(REAL_SCHEDULE_FALLBACK).forEach(([className, days]) => {
             if (days[dayName]) {
                 days[dayName].forEach((lesson, lessonIndex) => {
                     const [startTime, endTime] = lesson.time.split('-');
@@ -475,6 +476,36 @@ export const ScheduleProvider = ({ children }) => {
         setBellSchedule(newSchedule);
     };
 
+    // === School schedule from Supabase (with fallback to mockData) ===
+    // realSchedule has the same shape as REAL_SCHEDULE for drop-in replacement:
+    //   { className: { dayOfWeek: [{time, subject, teacher: lastName}] } }
+    const [realSchedule, setRealSchedule] = useState(REAL_SCHEDULE_FALLBACK);
+    const [schoolRows, setSchoolRows] = useState([]);
+
+    const reloadSchoolSchedule = async () => {
+        try {
+            const rows = await loadSchoolLessons();
+            if (!rows || rows.length === 0) {
+                // DB empty — keep fallback so the app still works
+                setRealSchedule(REAL_SCHEDULE_FALLBACK);
+                setSchoolRows([]);
+                return;
+            }
+            setSchoolRows(rows);
+            const weekly = buildScheduleWeekly(rows, teachers);
+            setRealSchedule(weekly);
+        } catch (err) {
+            console.warn('[ScheduleContext] failed to load school lessons, using mockData fallback:', err?.message);
+            setRealSchedule(REAL_SCHEDULE_FALLBACK);
+            setSchoolRows([]);
+        }
+    };
+
+    useEffect(() => {
+        reloadSchoolSchedule();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [teachers]);
+
     return (
         <ScheduleContext.Provider value={{
             events: getAllEvents(), // Все события (расписание + пользовательские)
@@ -494,7 +525,11 @@ export const ScheduleProvider = ({ children }) => {
             getAvailableTeachersForSlot,
             getSlotsForDate,
             bellSchedule,
-            updateBellSchedule
+            updateBellSchedule,
+            // School schedule (from Supabase with fallback)
+            realSchedule,
+            schoolLessonRows: schoolRows, // raw rows with dates — for date-aware code
+            reloadSchoolSchedule,
         }}>
             {children}
         </ScheduleContext.Provider>

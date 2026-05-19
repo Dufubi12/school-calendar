@@ -726,6 +726,145 @@ export async function deleteIndividualSlot(id) {
 }
 
 // =====================================================================
+// SCHOOL LESSONS — групповые уроки с привязкой к датам
+// =====================================================================
+//
+// Структура одной записи:
+//   { id, teacher_id, class_name, subject, day_of_week, time_slot,
+//     recurrence_pattern, single_date, effective_from, effective_to }
+//
+// Helper isLessonActiveOnDate(row, dateStr) проверяет действует ли
+// запись на конкретную дату (учитывая effective_from/to + recurrence).
+// =====================================================================
+
+export function isLessonActiveOnDate(row, dateStr) {
+    if (!row || !dateStr) return false;
+    if (row.effective_from && dateStr < row.effective_from) return false;
+    if (row.effective_to && dateStr > row.effective_to) return false;
+    if (row.recurrence_pattern === 'once') {
+        return row.single_date === dateStr;
+    }
+    // For weekly/biweekly the calling code already filters by day_of_week.
+    // For biweekly we additionally check that dateStr is an even number of
+    // weeks from effective_from.
+    if (row.recurrence_pattern === 'biweekly') {
+        const a = new Date(row.effective_from + 'T00:00:00');
+        const b = new Date(dateStr + 'T00:00:00');
+        const diffDays = Math.round((b - a) / 86400000);
+        if (diffDays < 0) return false;
+        const weeks = Math.floor(diffDays / 7);
+        if (weeks % 2 !== 0) return false;
+    }
+    return true;
+}
+
+// Load all school lessons. Returns array of rows.
+export async function loadSchoolLessons() {
+    const { data, error } = await supabase
+        .from('school_lessons')
+        .select('id, teacher_id, class_name, subject, day_of_week, time_slot, recurrence_pattern, single_date, effective_from, effective_to')
+        .order('class_name')
+        .order('day_of_week')
+        .order('time_slot');
+    if (error) {
+        console.warn('[loadSchoolLessons] failed:', error.message);
+        return [];
+    }
+    return data || [];
+}
+
+// Build a REAL_SCHEDULE-shaped object from rows for a given date.
+// Returns: { className: { dayOfWeek: [{time, subject, teacher: lastName}] } }
+// Only rows active on `dateStr` are included.
+export function buildScheduleForDate(rows, dateStr, teachers = []) {
+    const teacherById = new Map(teachers.map(t => [t.id, t]));
+    const out = {};
+    rows.forEach(row => {
+        if (!isLessonActiveOnDate(row, dateStr)) return;
+        const t = row.teacher_id ? teacherById.get(row.teacher_id) : null;
+        const lastName = t ? t.name.split(' ')[0] : '';
+        if (!out[row.class_name]) out[row.class_name] = {};
+        if (!out[row.class_name][row.day_of_week]) out[row.class_name][row.day_of_week] = [];
+        out[row.class_name][row.day_of_week].push({
+            time: row.time_slot,
+            subject: row.subject,
+            teacher: lastName,
+        });
+    });
+    return out;
+}
+
+// Build the same shape but ignoring dates (just by day_of_week).
+// Useful for the legacy "weekly grid" displays that don't have a date context.
+export function buildScheduleWeekly(rows, teachers = []) {
+    const teacherById = new Map(teachers.map(t => [t.id, t]));
+    const out = {};
+    rows.forEach(row => {
+        // Skip closed historical versions — we want the current state of the schedule
+        if (row.effective_to) {
+            const today = new Date().toISOString().slice(0, 10);
+            if (today > row.effective_to) return;
+        }
+        if (row.recurrence_pattern === 'once') return; // weekly view ignores one-offs
+        const t = row.teacher_id ? teacherById.get(row.teacher_id) : null;
+        const lastName = t ? t.name.split(' ')[0] : '';
+        if (!out[row.class_name]) out[row.class_name] = {};
+        if (!out[row.class_name][row.day_of_week]) out[row.class_name][row.day_of_week] = [];
+        out[row.class_name][row.day_of_week].push({
+            time: row.time_slot,
+            subject: row.subject,
+            teacher: lastName,
+        });
+    });
+    return out;
+}
+
+// Create a new school lesson
+export async function createSchoolLesson({
+    teacherId, className, subject, dayOfWeek, timeSlot,
+    recurrencePattern = 'weekly', singleDate = null,
+    effectiveFrom = null, effectiveTo = null,
+}) {
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const { data, error } = await supabase
+        .from('school_lessons')
+        .insert({
+            teacher_id: teacherId,
+            class_name: className,
+            subject,
+            day_of_week: dayOfWeek,
+            time_slot: timeSlot,
+            recurrence_pattern: recurrencePattern,
+            single_date: recurrencePattern === 'once' ? singleDate : null,
+            effective_from: effectiveFrom || todayStr,
+            effective_to: effectiveTo,
+        })
+        .select()
+        .single();
+    if (error) throw error;
+    return data;
+}
+
+// Close a school lesson (effective_to = yesterday) — preserves history.
+// If hardDelete=true, removes the row entirely (use for fresh inserts only).
+export async function closeSchoolLesson(id, hardDelete = false) {
+    if (hardDelete) {
+        const { error } = await supabase.from('school_lessons').delete().eq('id', id);
+        if (error) throw error;
+        return;
+    }
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+    const { error } = await supabase
+        .from('school_lessons')
+        .update({ effective_to: yStr, updated_at: new Date().toISOString() })
+        .eq('id', id);
+    if (error) throw error;
+}
+
+// =====================================================================
 // TEACHER TIME GRID — custom time slots for the IZ page (per teacher)
 // =====================================================================
 

@@ -77,6 +77,7 @@ const TeacherSchedulePage = () => {
     });
     const [selectedTimeSlots, setSelectedTimeSlots] = useState('all');
     const [selectedClass, setSelectedClass] = useState('all');
+    const [kindFilter, setKindFilter] = useState('all'); // 'all' | 'group' | 'individual'
 
     // Async-loaded data from Supabase
     const [homeworkChecks, setHomeworkChecks] = useState({});
@@ -211,13 +212,27 @@ const TeacherSchedulePage = () => {
         return bell ? bell.label : '';
     };
 
-    // Расписание с применённым фильтром по классу
+    // Группа/Индивид: классифицируем тип урока по lessonTypes (default = Групповой)
+    const INDIVIDUAL_TYPES = new Set(['Индивидуальный', 'ОГЭ', 'ЕГЭ', 'Тьюторский']);
+    const matchesKind = useCallback((lesson, dayName, time) => {
+        if (kindFilter === 'all') return true;
+        const lastName = selectedTeacher?.name?.split(' ')[0] || '';
+        const typeKey = `${lesson.grade}_${dayName}_${time}_${lastName}`;
+        const type = lessonTypes[typeKey] || DEFAULT_LESSON_TYPE;
+        const isIndividual = INDIVIDUAL_TYPES.has(type);
+        return kindFilter === 'individual' ? isIndividual : !isIndividual;
+    }, [kindFilter, selectedTeacher, lessonTypes]);
+
+    // Расписание с применёнными фильтрами по классу и виду урока
     const filteredWeeklySchedule = useMemo(() => {
-        if (selectedClass === 'all') return weeklySchedule;
+        if (selectedClass === 'all' && kindFilter === 'all') return weeklySchedule;
         const out = {};
         Object.entries(weeklySchedule).forEach(([time, days]) => {
             Object.entries(days).forEach(([dayName, lessons]) => {
-                const matching = lessons.filter(l => l.grade === selectedClass);
+                const matching = lessons.filter(l =>
+                    (selectedClass === 'all' || l.grade === selectedClass)
+                    && matchesKind(l, dayName, time)
+                );
                 if (matching.length > 0) {
                     if (!out[time]) out[time] = {};
                     out[time][dayName] = matching;
@@ -225,7 +240,7 @@ const TeacherSchedulePage = () => {
             });
         });
         return out;
-    }, [weeklySchedule, selectedClass]);
+    }, [weeklySchedule, selectedClass, kindFilter, matchesKind]);
 
     // Считаем общее количество уроков в неделю
     const totalLessonsPerWeek = useMemo(() => {
@@ -470,6 +485,24 @@ const TeacherSchedulePage = () => {
                 {/* Фильтры по дате и времени */}
                 {selectedTeacher && (
                     <>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+                            <label htmlFor="kind-filter" style={{ fontWeight: 500 }}>📚 Тип:</label>
+                            <select
+                                id="kind-filter"
+                                value={kindFilter}
+                                onChange={(e) => setKindFilter(e.target.value)}
+                                style={{
+                                    padding: '6px 8px', borderRadius: '6px',
+                                    border: '1px solid #e5e7eb', fontSize: '0.85rem',
+                                    cursor: 'pointer', minWidth: '120px'
+                                }}
+                            >
+                                <option value="all">Все</option>
+                                <option value="group">Групповые</option>
+                                <option value="individual">Индивидуальные</option>
+                            </select>
+                        </div>
+
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
                             <label htmlFor="class-filter" style={{ fontWeight: 500 }}>🏫 Класс:</label>
                             <select

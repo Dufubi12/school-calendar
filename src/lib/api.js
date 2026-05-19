@@ -324,6 +324,79 @@ export async function deleteInvitation(id) {
 }
 
 // =====================================================================
+// INDIVIDUAL SLOTS (ИЗ) — hourly availability per teacher per day
+// Returns: { teacherLastName: { name, description, slots: { day: { time: 'free'|'busy' } } } }
+// =====================================================================
+export async function loadIndividualSlots(teachers = []) {
+    try {
+        const [slotsRes, descRes] = await Promise.all([
+            supabase.from('individual_slots').select('teacher_id, day, time_slot, status'),
+            supabase.from('individual_slot_descriptions').select('teacher_id, description'),
+        ]);
+        const result = {};
+        const teacherById = new Map(teachers.map(t => [t.id, t]));
+        const descByTeacher = {};
+        (descRes.data || []).forEach(d => { descByTeacher[d.teacher_id] = d.description; });
+
+        (slotsRes.data || []).forEach(row => {
+            const t = teacherById.get(row.teacher_id);
+            const lastName = t ? t.name.split(' ')[0] : String(row.teacher_id);
+            if (!result[lastName]) {
+                result[lastName] = {
+                    teacherId: row.teacher_id,
+                    name: t ? t.name : lastName,
+                    description: descByTeacher[row.teacher_id] || '',
+                    slots: {},
+                };
+            }
+            if (!result[lastName].slots[row.day]) result[lastName].slots[row.day] = {};
+            result[lastName].slots[row.day][row.time_slot] = row.status;
+        });
+
+        // Also include teachers who have description but no slots
+        (descRes.data || []).forEach(d => {
+            const t = teacherById.get(d.teacher_id);
+            const lastName = t ? t.name.split(' ')[0] : String(d.teacher_id);
+            if (!result[lastName]) {
+                result[lastName] = {
+                    teacherId: d.teacher_id,
+                    name: t ? t.name : lastName,
+                    description: d.description || '',
+                    slots: {},
+                };
+            }
+        });
+
+        return result;
+    } catch (err) {
+        console.error('loadIndividualSlots error:', err);
+        return {};
+    }
+}
+
+// Save / clear a single slot status (status=null → delete row)
+export async function saveIndividualSlot(teacherId, day, timeSlot, status) {
+    if (status === null || status === undefined) {
+        const { error } = await supabase
+            .from('individual_slots')
+            .delete()
+            .match({ teacher_id: teacherId, day, time_slot: timeSlot });
+        if (error) throw error;
+        return;
+    }
+    const { error } = await supabase
+        .from('individual_slots')
+        .upsert({
+            teacher_id: teacherId,
+            day,
+            time_slot: timeSlot,
+            status,
+            updated_at: new Date().toISOString(),
+        }, { onConflict: 'teacher_id,day,time_slot' });
+    if (error) throw error;
+}
+
+// =====================================================================
 // TEACHERS / LESSONS / BELL SCHEDULE — currently still loaded from mockData,
 // but we expose Supabase loaders for future migration.
 // =====================================================================

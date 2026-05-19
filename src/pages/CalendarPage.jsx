@@ -13,7 +13,7 @@ import BellScheduleEditor from '../components/Schedule/BellScheduleEditor';
 import ClubModal from '../components/Schedule/ClubModal';
 import { useSchedule } from '../context/ScheduleContext';
 import { filterByRole, isTutor } from '../components/RoleFilterTabs';
-import { loadInvitations } from '../lib/api';
+import { loadInvitations, loadIndividualSlots } from '../lib/api';
 
 const CalendarPage = () => {
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -42,24 +42,36 @@ const CalendarPage = () => {
     // Data State
     const { events, addEvent, removeEvent, assignTeacherToSlot, bellSchedule, updateBellSchedule, teachers } = useSchedule();
 
-    // Invitations (for calendar display: pending = dashed, accepted = substitution)
+    // Invitations + ИЗ-slots (busy = recurring individual lesson)
     const [invitations, setInvitations] = useState([]);
+    const [izSlots, setIzSlots] = useState({});
     useEffect(() => {
         let cancelled = false;
         const refresh = async () => {
             try {
-                const data = await loadInvitations();
-                if (!cancelled) setInvitations(data || []);
+                const [invs, slots] = await Promise.all([
+                    loadInvitations(),
+                    loadIndividualSlots(teachers),
+                ]);
+                if (cancelled) return;
+                setInvitations(invs || []);
+                // Shallow check: only update if data actually changed (avoid izEvents recompute)
+                setIzSlots(prev => {
+                    const next = slots || {};
+                    if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
+                    return next;
+                });
             } catch { /* ignore */ }
         };
         refresh();
         const onFocus = () => refresh();
         window.addEventListener('focus', onFocus);
         return () => { cancelled = true; window.removeEventListener('focus', onFocus); };
-    }, []);
+    }, [teachers]);
 
-    // Merge invitations into events as virtual entries
+    // Merge invitations + ИЗ-slots into events as virtual entries
     const eventsWithInvitations = useMemo(() => {
+        // 1) invitations → virtual events
         const invEvents = (invitations || [])
             .filter(inv => inv.status !== 'declined')
             .map(inv => {
@@ -84,7 +96,50 @@ const CalendarPage = () => {
                 };
             });
 
-        const merged = [...events, ...invEvents];
+        // 2) ИЗ-busy slots → recurring weekly events for visible month ± 1
+        const dayCodeToWeekday = {
+            'пн': 1, 'вт': 2, 'ср': 3, 'чт': 4, 'пт': 5, 'сб': 6, 'вс': 0,
+        };
+        const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+        const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 2, 0);
+
+        const izEvents = [];
+        Object.entries(izSlots).forEach(([lastName, data]) => {
+            const tIdNum = data?.teacherId;
+            const fullName = data?.name || lastName;
+            Object.entries(data?.slots || {}).forEach(([day, timeMap]) => {
+                const dow = dayCodeToWeekday[day];
+                if (dow === undefined) return;
+                Object.entries(timeMap).forEach(([timeKey, status]) => {
+                    if (status !== 'busy') return;
+                    const [startTime, endTime] = timeKey.split('-');
+                    // generate all dates in [monthStart..monthEnd] with this dow
+                    const cur = new Date(monthStart);
+                    while (cur.getDay() !== dow) cur.setDate(cur.getDate() + 1);
+                    while (cur <= monthEnd) {
+                        // Local-date formatting (avoid timezone shift from toISOString)
+                        const dateStr = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+                        izEvents.push({
+                            id: `iz-${tIdNum}-${dateStr}-${timeKey}`,
+                            type: 'individual',
+                            date: dateStr,
+                            startTime, endTime,
+                            time: timeKey,
+                            subject: 'Индивид.',
+                            grade: '',
+                            className: '',
+                            teacher: lastName,
+                            teacherName: fullName,
+                            lessonKind: 'ИЗ',
+                            details: `ИЗ: ${fullName}`
+                        });
+                        cur.setDate(cur.getDate() + 7);
+                    }
+                });
+            });
+        });
+
+        const merged = [...events, ...invEvents, ...izEvents];
 
         // Apply kind filter (group vs individual)
         if (kindFilter === 'all') return merged;
@@ -93,7 +148,7 @@ const CalendarPage = () => {
             const isInd = INDIVIDUAL_KINDS.has(ev.lessonKind);
             return kindFilter === 'individual' ? isInd : !isInd;
         });
-    }, [events, invitations, teachers, kindFilter]);
+    }, [events, invitations, izSlots, teachers, kindFilter, currentDate]);
 
     // Last names of teachers allowed by current role filter (null = no role filter)
     const allowedTeacherLastNames = useMemo(() => {

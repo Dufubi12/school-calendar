@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSchedule } from '../context/ScheduleContext';
 import { GraduationCap, Check, X, Info } from 'lucide-react';
-import initialSlotsData from '../data/individualSlots.json';
+import { loadIndividualSlots, saveIndividualSlot } from '../lib/api';
 
 // Day codes used in the source CSV and storage
 const DAYS = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
@@ -22,56 +22,29 @@ const HOUR_SLOTS = (() => {
 
 const NEXT_STATE = { 'default': 'free', 'free': 'busy', 'busy': 'default' };
 
-const STORAGE_KEY = 'school_calendar_individual_slots';
-const DATA_VERSION = 1;
-
-// Build a teacher -> data map keyed by lastName for easy lookups
-const buildInitialMap = () => {
-    const map = {};
-    initialSlotsData.teachers.forEach(t => {
-        const key = (t.name || '').split(' ')[0];
-        if (!key) return;
-        map[key] = {
-            name: t.name,
-            description: t.description || '',
-            slots: t.slots || {},
-        };
-    });
-    return map;
-};
-
-const loadStoredData = () => {
-    try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return null;
-        const parsed = JSON.parse(raw);
-        if (parsed.version !== DATA_VERSION) return null;
-        return parsed.data || null;
-    } catch {
-        return null;
-    }
-};
-
-const saveStoredData = (data) => {
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: DATA_VERSION, data }));
-    } catch (err) {
-        console.error('Failed to save individual slots', err);
-    }
-};
-
 const IndividualSlotsPage = () => {
     const { teachers } = useSchedule();
     const { isAdmin, isTeacher, currentUser } = useAuth();
 
-    // Seed individual slots map from CSV import (first time) or load from localStorage
-    const [slotsByTeacher, setSlotsByTeacher] = useState(() => {
-        const stored = loadStoredData();
-        if (stored) return stored;
-        const initial = buildInitialMap();
-        saveStoredData(initial);
-        return initial;
-    });
+    // Load slots from Supabase on mount
+    const [slotsByTeacher, setSlotsByTeacher] = useState({});
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        let cancelled = false;
+        loadIndividualSlots(teachers)
+            .then(data => {
+                if (!cancelled) {
+                    setSlotsByTeacher(data || {});
+                    setLoading(false);
+                }
+            })
+            .catch(err => {
+                console.error('Failed to load IZ slots', err);
+                if (!cancelled) setLoading(false);
+            });
+        return () => { cancelled = true; };
+    }, [teachers]);
 
     // Resolve current user's last name to filter for teacher view
     const currentTeacherLastName = useMemo(() => {
@@ -133,36 +106,48 @@ const IndividualSlotsPage = () => {
         return selected.slots?.[day]?.[timeKey] || 'default';
     }, [selected]);
 
-    const cycleCell = useCallback((day, timeKey) => {
+    const cycleCell = useCallback(async (day, timeKey) => {
         if (readOnly || !selectedTeacherKey) return;
+
+        // Determine new status from current
+        const teacher = slotsByTeacher[selectedTeacherKey];
+        const teacherId = teacher?.teacherId
+            || teachers.find(t => t.name.split(' ')[0] === selectedTeacherKey)?.id;
+        if (!teacherId) {
+            console.error('Cannot find teacher_id for', selectedTeacherKey);
+            return;
+        }
+        const current = teacher?.slots?.[day]?.[timeKey] || 'default';
+        const next = NEXT_STATE[current];
+        const nextStatus = next === 'default' ? null : next;
+
+        // Optimistic local update
+        const prevState = slotsByTeacher;
         setSlotsByTeacher(prev => {
-            const teacher = prev[selectedTeacherKey] || { name: selectedTeacherKey, description: '', slots: {} };
-            const current = teacher.slots?.[day]?.[timeKey] || 'default';
-            const next = NEXT_STATE[current];
-
-            const newSlots = { ...(teacher.slots || {}) };
+            const t = prev[selectedTeacherKey] || { teacherId, name: selectedTeacherKey, description: '', slots: {} };
+            const newSlots = { ...(t.slots || {}) };
             const dayBranch = { ...(newSlots[day] || {}) };
-
-            if (next === 'default') {
+            if (nextStatus === null) {
                 delete dayBranch[timeKey];
             } else {
-                dayBranch[timeKey] = next;
+                dayBranch[timeKey] = nextStatus;
             }
-
             if (Object.keys(dayBranch).length === 0) {
                 delete newSlots[day];
             } else {
                 newSlots[day] = dayBranch;
             }
-
-            const updated = {
-                ...prev,
-                [selectedTeacherKey]: { ...teacher, slots: newSlots }
-            };
-            saveStoredData(updated);
-            return updated;
+            return { ...prev, [selectedTeacherKey]: { ...t, teacherId, slots: newSlots } };
         });
-    }, [readOnly, selectedTeacherKey]);
+
+        // Persist to Supabase
+        try {
+            await saveIndividualSlot(teacherId, day, timeKey, nextStatus);
+        } catch (err) {
+            console.error('Failed to save IZ slot, reverting', err);
+            setSlotsByTeacher(prevState);
+        }
+    }, [readOnly, selectedTeacherKey, slotsByTeacher, teachers]);
 
     const totalSlotsForTeacher = (key) => {
         const t = slotsByTeacher[key];
@@ -187,6 +172,16 @@ const IndividualSlotsPage = () => {
         gap: '3px',
         minHeight: '32px'
     });
+
+    if (loading) {
+        return (
+            <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+                <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--color-text-muted)' }}>
+                    Загрузка…
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div style={{ maxWidth: '1400px', margin: '0 auto' }}>

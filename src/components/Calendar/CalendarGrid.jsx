@@ -140,22 +140,29 @@ const CalendarGrid = ({ currentDate, onDayClick, substitutions = [], selectedCla
                                         const isSubstitution = event.type === 'substitution';
                                         const isClub = event.type === 'club';
                                         const isPending = event.type === 'pending-invitation';
+                                        const isIndividual = event.type === 'individual';
                                         const bgColor = isPending
                                             ? 'var(--color-warning-bg)'
-                                            : isSubstitution
-                                                ? 'var(--color-danger-bg)'
-                                                : isClub ? '#F3EAFB' : 'var(--color-success-bg)';
+                                            : isIndividual
+                                                ? '#fef3c7'
+                                                : isSubstitution
+                                                    ? 'var(--color-danger-bg)'
+                                                    : isClub ? '#F3EAFB' : 'var(--color-success-bg)';
                                         const textColor = isPending
                                             ? 'var(--color-warning)'
-                                            : isSubstitution
-                                                ? 'var(--color-danger)'
-                                                : isClub ? '#6b21a8' : 'var(--color-success)';
+                                            : isIndividual
+                                                ? '#92400e'
+                                                : isSubstitution
+                                                    ? 'var(--color-danger)'
+                                                    : isClub ? '#6b21a8' : 'var(--color-success)';
                                         const borderColor = isPending
                                             ? 'var(--color-warning-border)'
-                                            : isSubstitution
-                                                ? 'var(--color-danger-border)'
-                                                : isClub ? '#D6BBE6' : 'var(--color-success-border)';
-                                        const icon = isPending ? '⏳' : isSubstitution ? '🔄' : isClub ? '🎯' : '✓';
+                                            : isIndividual
+                                                ? '#fde68a'
+                                                : isSubstitution
+                                                    ? 'var(--color-danger-border)'
+                                                    : isClub ? '#D6BBE6' : 'var(--color-success-border)';
+                                        const icon = isPending ? '⏳' : isIndividual ? '👤' : isSubstitution ? '🔄' : isClub ? '🎯' : '✓';
                                         const time = event.startTime || (event.time ? event.time.split('-')[0] : '');
                                         const teacher = resolveFullName(event.teacher || '');
 

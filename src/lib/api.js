@@ -389,6 +389,22 @@ export async function deleteInvitation(id) {
 //   }
 // }
 // =====================================================================
+// Count distinct teachers whose IZ slots were updated within the last `hours` hours.
+// Used by Layout to render the admin's "recent changes" badge on /individual-slots.
+export async function countRecentIzChanges(hours = 24) {
+    const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+    const { data, error } = await supabase
+        .from('individual_slots')
+        .select('teacher_id, updated_at')
+        .gte('updated_at', since);
+    if (error) {
+        console.warn('[countRecentIzChanges] failed:', error.message);
+        return 0;
+    }
+    const teacherIds = new Set((data || []).map(r => r.teacher_id));
+    return teacherIds.size;
+}
+
 export async function loadIndividualSlots(teachers = []) {
     try {
         const [slotsRes, descRes] = await Promise.all([

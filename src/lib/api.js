@@ -846,6 +846,30 @@ export async function createSchoolLesson({
     return data;
 }
 
+// In-place update of a school lesson row. Use for small fixes
+// (typo in subject, wrong teacher_id) where you want to keep the
+// existing effective range. For time/day changes that should preserve
+// history, prefer the versioning workflow: close the old row and
+// create a new one.
+export async function updateSchoolLesson(id, patch) {
+    const allowed = {};
+    if ('teacher_id' in patch) allowed.teacher_id = patch.teacher_id;
+    if ('class_name' in patch) allowed.class_name = patch.class_name;
+    if ('subject' in patch) allowed.subject = patch.subject;
+    if ('day_of_week' in patch) allowed.day_of_week = patch.day_of_week;
+    if ('time_slot' in patch) allowed.time_slot = patch.time_slot;
+    if ('recurrence_pattern' in patch) allowed.recurrence_pattern = patch.recurrence_pattern;
+    if ('single_date' in patch) allowed.single_date = patch.single_date;
+    if ('effective_from' in patch) allowed.effective_from = patch.effective_from;
+    if ('effective_to' in patch) allowed.effective_to = patch.effective_to;
+    allowed.updated_at = new Date().toISOString();
+    const { error } = await supabase
+        .from('school_lessons')
+        .update(allowed)
+        .eq('id', id);
+    if (error) throw error;
+}
+
 // Close a school lesson (effective_to = yesterday) — preserves history.
 // If hardDelete=true, removes the row entirely (use for fresh inserts only).
 export async function closeSchoolLesson(id, hardDelete = false) {

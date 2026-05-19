@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSchedule } from '../context/ScheduleContext';
 import { useAuth } from '../context/AuthContext';
-import { CalendarDays, Plus, Trash2, X, Filter } from 'lucide-react';
+import { CalendarDays, Plus, Trash2, X, Filter, Pencil } from 'lucide-react';
 import {
     loadSchoolLessons,
     createSchoolLesson,
     closeSchoolLesson,
+    updateSchoolLesson,
 } from '../lib/api';
 
 const WEEKDAYS = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
@@ -17,6 +18,7 @@ const SchoolLessonsPage = () => {
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showAddModal, setShowAddModal] = useState(false);
+    const [editingRow, setEditingRow] = useState(null);
 
     // Filters
     const [filterClass, setFilterClass] = useState('all');
@@ -201,17 +203,30 @@ const SchoolLessonsPage = () => {
                                                 {row.effective_to ? ` по ${row.effective_to}` : ''}
                                             </td>
                                             <td style={td}>
-                                                <button
-                                                    onClick={() => handleClose(row)}
-                                                    style={{
-                                                        background: 'none', border: 'none', cursor: 'pointer',
-                                                        color: '#ef4444', padding: '4px',
-                                                        display: 'inline-flex', alignItems: 'center'
-                                                    }}
-                                                    title={closed ? 'Удалить навсегда' : 'Закрыть (effective_to = вчера)'}
-                                                >
-                                                    <Trash2 size={14} />
-                                                </button>
+                                                <div style={{ display: 'inline-flex', gap: '4px' }}>
+                                                    <button
+                                                        onClick={() => setEditingRow(row)}
+                                                        style={{
+                                                            background: 'none', border: 'none', cursor: 'pointer',
+                                                            color: '#475569', padding: '4px',
+                                                            display: 'inline-flex', alignItems: 'center'
+                                                        }}
+                                                        title="Редактировать"
+                                                    >
+                                                        <Pencil size={14} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleClose(row)}
+                                                        style={{
+                                                            background: 'none', border: 'none', cursor: 'pointer',
+                                                            color: '#ef4444', padding: '4px',
+                                                            display: 'inline-flex', alignItems: 'center'
+                                                        }}
+                                                        title={closed ? 'Удалить навсегда' : 'Закрыть (effective_to = вчера)'}
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     );
@@ -223,35 +238,52 @@ const SchoolLessonsPage = () => {
             </div>
 
             {showAddModal && (
-                <AddLessonModal
+                <LessonModal
+                    mode="add"
                     teachers={teachers}
                     classes={allClasses}
                     onClose={() => setShowAddModal(false)}
-                    onAdded={handleAdded}
+                    onDone={handleAdded}
+                />
+            )}
+
+            {editingRow && (
+                <LessonModal
+                    mode="edit"
+                    teachers={teachers}
+                    classes={allClasses}
+                    row={editingRow}
+                    onClose={() => setEditingRow(null)}
+                    onDone={async () => {
+                        setEditingRow(null);
+                        await refresh();
+                        await reloadSchoolSchedule();
+                    }}
                 />
             )}
         </div>
     );
 };
 
-const AddLessonModal = ({ teachers, classes, onClose, onAdded }) => {
-    const [className, setClassName] = useState(classes[0] || '');
+const LessonModal = ({ mode, teachers, classes, row, onClose, onDone }) => {
+    const isEdit = mode === 'edit' && row;
+    const initialTimeParts = isEdit && row.time_slot ? row.time_slot.split('-') : ['09:00', '09:45'];
+    const todayStr = (() => {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    })();
+
+    const [className, setClassName] = useState(isEdit ? row.class_name : (classes[0] || ''));
     const [customClass, setCustomClass] = useState('');
-    const [dayOfWeek, setDayOfWeek] = useState('Понедельник');
-    const [startTime, setStartTime] = useState('09:00');
-    const [endTime, setEndTime] = useState('09:45');
-    const [subject, setSubject] = useState('');
-    const [teacherId, setTeacherId] = useState('');
-    const [recurrence, setRecurrence] = useState('weekly');
-    const [singleDate, setSingleDate] = useState(() => {
-        const d = new Date();
-        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    });
-    const [effectiveFrom, setEffectiveFrom] = useState(() => {
-        const d = new Date();
-        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    });
-    const [effectiveTo, setEffectiveTo] = useState('');
+    const [dayOfWeek, setDayOfWeek] = useState(isEdit ? row.day_of_week : 'Понедельник');
+    const [startTime, setStartTime] = useState(initialTimeParts[0] || '09:00');
+    const [endTime, setEndTime] = useState(initialTimeParts[1] || '09:45');
+    const [subject, setSubject] = useState(isEdit ? row.subject : '');
+    const [teacherId, setTeacherId] = useState(isEdit && row.teacher_id ? String(row.teacher_id) : '');
+    const [recurrence, setRecurrence] = useState(isEdit ? row.recurrence_pattern : 'weekly');
+    const [singleDate, setSingleDate] = useState(isEdit ? (row.single_date || todayStr) : todayStr);
+    const [effectiveFrom, setEffectiveFrom] = useState(isEdit ? (row.effective_from || todayStr) : todayStr);
+    const [effectiveTo, setEffectiveTo] = useState(isEdit ? (row.effective_to || '') : '');
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState(null);
 
@@ -267,20 +299,35 @@ const AddLessonModal = ({ teachers, classes, onClose, onAdded }) => {
 
         setSubmitting(true);
         try {
-            await createSchoolLesson({
-                teacherId: teacherId ? Number(teacherId) : null,
-                className: cls,
+            const payload = {
+                teacher_id: teacherId ? Number(teacherId) : null,
+                class_name: cls,
                 subject: subject.trim(),
-                dayOfWeek,
-                timeSlot: `${startTime}-${endTime}`,
-                recurrencePattern: recurrence,
-                singleDate: recurrence === 'once' ? singleDate : null,
-                effectiveFrom: recurrence === 'once' ? singleDate : effectiveFrom,
-                effectiveTo: recurrence === 'once' ? singleDate : (effectiveTo || null),
-            });
-            await onAdded();
+                day_of_week: dayOfWeek,
+                time_slot: `${startTime}-${endTime}`,
+                recurrence_pattern: recurrence,
+                single_date: recurrence === 'once' ? singleDate : null,
+                effective_from: recurrence === 'once' ? singleDate : effectiveFrom,
+                effective_to: recurrence === 'once' ? singleDate : (effectiveTo || null),
+            };
+            if (isEdit) {
+                await updateSchoolLesson(row.id, payload);
+            } else {
+                await createSchoolLesson({
+                    teacherId: payload.teacher_id,
+                    className: payload.class_name,
+                    subject: payload.subject,
+                    dayOfWeek: payload.day_of_week,
+                    timeSlot: payload.time_slot,
+                    recurrencePattern: payload.recurrence_pattern,
+                    singleDate: payload.single_date,
+                    effectiveFrom: payload.effective_from,
+                    effectiveTo: payload.effective_to,
+                });
+            }
+            await onDone();
         } catch (err) {
-            setError(err?.message || 'Не удалось добавить');
+            setError(err?.message || (isEdit ? 'Не удалось сохранить' : 'Не удалось добавить'));
         } finally {
             setSubmitting(false);
         }
@@ -290,7 +337,7 @@ const AddLessonModal = ({ teachers, classes, onClose, onAdded }) => {
         <div className="modal-overlay" onClick={onClose}>
             <div className="card modal-content" onClick={(e) => e.stopPropagation()} style={{ width: '560px', maxWidth: '95%', padding: '1.5rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                    <h3 style={{ margin: 0 }}>Добавить урок</h3>
+                    <h3 style={{ margin: 0 }}>{isEdit ? 'Редактировать урок' : 'Добавить урок'}</h3>
                     <button onClick={onClose} className="btn btn-ghost" style={{ padding: '4px' }}>
                         <X size={18} />
                     </button>
@@ -416,7 +463,9 @@ const AddLessonModal = ({ teachers, classes, onClose, onAdded }) => {
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                         <button type="button" onClick={onClose} className="btn btn-secondary">Отмена</button>
                         <button type="submit" className="btn btn-primary" disabled={submitting}>
-                            {submitting ? 'Добавление…' : 'Добавить'}
+                            {submitting
+                                ? (isEdit ? 'Сохранение…' : 'Добавление…')
+                                : (isEdit ? 'Сохранить' : 'Добавить')}
                         </button>
                     </div>
                 </form>

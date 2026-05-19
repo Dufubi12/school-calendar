@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Calendar, Users, BarChart3, Wrench, UserCheck, ClipboardCheck, LogOut, CalendarClock, Mail, Tag, GraduationCap, Sprout, Wallet } from 'lucide-react';
+import { Calendar, Users, BarChart3, Wrench, UserCheck, ClipboardCheck, LogOut, CalendarClock, Mail, Tag, GraduationCap, Sprout, Wallet, CalendarDays } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { loadInvitations, countPendingIzSlots, countRecentIzDecisions } from '../lib/api';
 
@@ -86,6 +86,7 @@ const Layout = () => {
     const adminLinks = [
         { to: '/', label: 'Календарь', icon: Calendar },
         { to: '/teachers', label: 'Учителя', icon: Users },
+        { to: '/school-lessons', label: 'Уроки', icon: CalendarDays },
         { to: '/teacher-schedule', label: 'Расписание', icon: UserCheck },
         { to: '/availability', label: 'Доступность', icon: CalendarClock },
         { to: '/individual-slots', label: 'Инд. занятия', icon: GraduationCap },

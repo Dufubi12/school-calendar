@@ -15,6 +15,7 @@ import InvitationsPage from './pages/InvitationsPage'
 import LessonTypesPage from './pages/LessonTypesPage'
 import IndividualSlotsPage from './pages/IndividualSlotsPage'
 import ExtraPayPage from './pages/ExtraPayPage'
+import SchoolLessonsPage from './pages/SchoolLessonsPage'
 import './App.css'
 
 const AdminOnly = ({ children }) => {
@@ -52,6 +53,7 @@ const AuthenticatedRoutes = () => {
                 <Route path="/availability" element={<TeacherAvailabilityPage />} />
                 <Route path="/individual-slots" element={<IndividualSlotsPage />} />
                 <Route path="/invitations" element={<AdminOnly><InvitationsPage /></AdminOnly>} />
+                <Route path="/school-lessons" element={<AdminOnly><SchoolLessonsPage /></AdminOnly>} />
                 <Route path="*" element={<Navigate to={isAdmin ? "/" : "/teacher-schedule"} replace />} />
             </Route>
         </Routes>

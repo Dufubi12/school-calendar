@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { Calendar, Users, BarChart3, Wrench, UserCheck, ClipboardCheck, LogOut, CalendarClock, Mail, Tag, GraduationCap, Sprout, Wallet, CalendarDays } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { loadInvitations, countPendingIzSlots, countRecentIzDecisions } from '../lib/api';
 
 const Layout = () => {
     const { currentUser, isAdmin, isTeacher, logout } = useAuth();
+    const toast = useToast();
     const location = useLocation();
     const [pendingCount, setPendingCount] = useState(0);
     // For admin: count of recently answered (accepted/declined) invitations in last 24h
@@ -15,13 +17,22 @@ const Layout = () => {
     // For teacher: count of admin decisions on own IZ slots in last 24h
     const [teacherRecentIzDecisions, setTeacherRecentIzDecisions] = useState(0);
 
+    // Previous values to detect *changes* (first poll establishes baseline, no toast)
+    const prevRef = useRef({
+        pending: null,
+        adminResp: null,
+        adminIz: null,
+        teacherIzDec: null,
+    });
+
     // Poll badges
     useEffect(() => {
-        // Reset counters when role context changes so a stale value can't linger
+        // Reset counters AND baseline when role context changes
         setPendingCount(0);
         setAdminRecentResponses(0);
         setAdminPendingIzSlots(0);
         setTeacherRecentIzDecisions(0);
+        prevRef.current = { pending: null, adminResp: null, adminIz: null, teacherIzDec: null };
 
         if (!isTeacher && !isAdmin) return;
         let cancelled = false;
@@ -29,15 +40,33 @@ const Layout = () => {
             try {
                 const invs = await loadInvitations();
                 if (cancelled) return;
+                const prev = prevRef.current;
                 if (isTeacher && currentUser?.teacherId) {
                     const tid = currentUser.teacherId;
                     const count = (invs || []).filter(
                         inv => inv.teacherId === tid && inv.status === 'pending'
                     ).length;
+                    if (prev.pending !== null && count > prev.pending) {
+                        const delta = count - prev.pending;
+                        toast.warning(
+                            delta === 1
+                                ? 'У вас новое приглашение'
+                                : `У вас ${delta} новых приглашений`,
+                            { title: 'Новое приглашение' }
+                        );
+                    }
+                    prev.pending = count;
                     setPendingCount(count);
 
                     const izDec = await countRecentIzDecisions(tid, 24);
-                    if (!cancelled) setTeacherRecentIzDecisions(izDec);
+                    if (cancelled) return;
+                    if (prev.teacherIzDec !== null && izDec > prev.teacherIzDec) {
+                        toast.info('Админ принял решение по вашему слоту — проверьте «Инд. занятия»', {
+                            title: 'Решение по слоту',
+                        });
+                    }
+                    prev.teacherIzDec = izDec;
+                    setTeacherRecentIzDecisions(izDec);
                 }
                 if (isAdmin) {
                     const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -46,10 +75,23 @@ const Layout = () => {
                             && inv.respondedAt
                             && inv.respondedAt >= dayAgo
                     ).length;
+                    if (prev.adminResp !== null && count > prev.adminResp) {
+                        toast.info('Педагог ответил на приглашение — откройте «Приглашения»', {
+                            title: 'Ответ педагога',
+                        });
+                    }
+                    prev.adminResp = count;
                     setAdminRecentResponses(count);
 
                     const pendingIz = await countPendingIzSlots();
-                    if (!cancelled) setAdminPendingIzSlots(pendingIz);
+                    if (cancelled) return;
+                    if (prev.adminIz !== null && pendingIz > prev.adminIz) {
+                        toast.warning('Появились новые слоты на согласование в «Инд. занятиях»', {
+                            title: 'Новые слоты',
+                        });
+                    }
+                    prev.adminIz = pendingIz;
+                    setAdminPendingIzSlots(pendingIz);
                 }
             } catch { /* ignore */ }
         };
@@ -62,7 +104,7 @@ const Layout = () => {
             clearInterval(id);
             window.removeEventListener('focus', onFocus);
         };
-    }, [isTeacher, isAdmin, currentUser]);
+    }, [isTeacher, isAdmin, currentUser, toast]);
 
     const linkStyle = (path) => {
         const active = location.pathname === path;

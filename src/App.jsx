@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ScheduleProvider } from './context/ScheduleContext'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { ToastProvider } from './context/ToastContext'
 import Layout from './components/Layout'
 import LoginPage from './pages/LoginPage'
 import TeacherLinkPage from './pages/TeacherLinkPage'
@@ -62,13 +63,15 @@ const AuthenticatedRoutes = () => {
 
 function App() {
     return (
-        <AuthProvider>
-            <ScheduleProvider>
-                <BrowserRouter>
-                    <AuthenticatedRoutes />
-                </BrowserRouter>
-            </ScheduleProvider>
-        </AuthProvider>
+        <ToastProvider>
+            <AuthProvider>
+                <ScheduleProvider>
+                    <BrowserRouter>
+                        <AuthenticatedRoutes />
+                    </BrowserRouter>
+                </ScheduleProvider>
+            </AuthProvider>
+        </ToastProvider>
     );
 }
 

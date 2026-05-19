@@ -2,7 +2,8 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useSchedule } from '../context/ScheduleContext';
 import { useAuth } from '../context/AuthContext';
 import { CalendarClock, Check, X } from 'lucide-react';
-import { loadAvailability, saveAvailability } from '../lib/api';
+import { loadAvailability, saveAvailability, loadIndividualSlots } from '../lib/api';
+import { REAL_SCHEDULE } from '../data/mockData';
 
 const WEEKDAYS = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
 const WEEKDAY_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -20,22 +21,29 @@ const TeacherAvailabilityPage = () => {
 
     // Availability state — shape: { [teacherId]: { [dayName]: { [timeSlot]: 'free'|'busy' } } }
     const [availability, setAvailability] = useState({});
+    // Individual slots by teacher last name (for grey-zone detection)
+    const [izSlots, setIzSlots] = useState({});
     const [loading, setLoading] = useState(true);
 
-    // Load availability from Supabase on mount
+    // Load availability + IZ slots from Supabase on mount
     useEffect(() => {
         let cancelled = false;
         setLoading(true);
-        loadAvailability()
-            .then(data => {
+        Promise.all([
+            loadAvailability(),
+            loadIndividualSlots(teachers),
+        ])
+            .then(([av, iz]) => {
                 if (!cancelled) {
-                    setAvailability(data || {});
+                    setAvailability(av || {});
+                    setIzSlots(iz || {});
                 }
             })
             .catch(err => {
-                console.error('Failed to load availability', err);
+                console.error('Failed to load availability/IZ', err);
                 if (!cancelled) {
                     setAvailability({});
+                    setIzSlots({});
                 }
             })
             .finally(() => {
@@ -44,7 +52,7 @@ const TeacherAvailabilityPage = () => {
                 }
             });
         return () => { cancelled = true; };
-    }, []);
+    }, [teachers]);
 
     // Sort teachers alphabetically (Russian collation)
     const sortedTeachers = useMemo(
@@ -90,6 +98,34 @@ const TeacherAvailabilityPage = () => {
         const tid = String(teacherId);
         return availability[tid]?.[day]?.[timeKey] || 'default';
     }, [availability]);
+
+    // Detect external "occupied" reasons — school lesson or busy IZ slot.
+    // Returns string reason or null.
+    const getOccupiedReason = useCallback((teacherName, day, timeKey) => {
+        if (!teacherName) return null;
+        const lastName = teacherName.split(' ')[0];
+        // 1) School schedule
+        try {
+            for (const [className, days] of Object.entries(REAL_SCHEDULE)) {
+                const lessons = days[day] || [];
+                for (const l of lessons) {
+                    if (l.teacher === lastName && l.time === timeKey) {
+                        return `Школа: ${className} ${l.subject}`;
+                    }
+                }
+            }
+        } catch { /* ignore */ }
+        // 2) IZ busy slot for this weekday/time
+        // izSlots: { [lastName]: { slots: { [dayCode]: { [timeKey]: 'busy'|'free' } } } }
+        const dayCodeMap = {
+            'Понедельник': 'пн', 'Вторник': 'вт', 'Среда': 'ср',
+            'Четверг': 'чт', 'Пятница': 'пт', 'Суббота': 'сб', 'Воскресенье': 'вс'
+        };
+        const dayCode = dayCodeMap[day];
+        const izStatus = izSlots[lastName]?.slots?.[dayCode]?.[timeKey];
+        if (izStatus === 'busy') return 'Занят в инд. занятиях';
+        return null;
+    }, [izSlots]);
 
     const cycleCell = useCallback(async (day, timeKey) => {
         if (readOnly || !selectedTeacherId) return;
@@ -360,14 +396,30 @@ const TeacherAvailabilityPage = () => {
                                     </td>
                                     {WEEKDAYS.map(day => {
                                         const state = getCellState(selectedTeacher.id, day, slot.key);
-                                        const clickable = !readOnly;
+                                        const occupiedReason = getOccupiedReason(selectedTeacher.name, day, slot.key);
+                                        const isOccupied = !!occupiedReason && state === 'default';
+                                        const clickable = !readOnly && !isOccupied;
                                         return (
                                             <td key={day} style={{
                                                 padding: '6px 8px',
                                                 borderBottom: '1px solid #e2e8f0',
                                                 textAlign: 'center'
                                             }}>
-                                                {clickable ? (
+                                                {isOccupied ? (
+                                                    <span
+                                                        style={{
+                                                            ...getCellStyle('default', false),
+                                                            backgroundColor: '#e2e8f0',
+                                                            color: '#64748b',
+                                                            cursor: 'not-allowed',
+                                                            fontStyle: 'italic',
+                                                            fontSize: '0.78rem'
+                                                        }}
+                                                        title={occupiedReason}
+                                                    >
+                                                        ⊘ занято
+                                                    </span>
+                                                ) : clickable ? (
                                                     <button
                                                         type="button"
                                                         onClick={() => cycleCell(day, slot.key)}

@@ -107,13 +107,6 @@ const ExtraPayPage = () => {
             persistEntry(next, currentTeacher.id, period);
         };
 
-        const updateMyRate = (key, value) => {
-            const next = setTeacherRate(store, currentTeacher.id, key, value);
-            persistRate(next, currentTeacher.id);
-        };
-
-        const myCustomRates = store.ratesPerTeacher?.[String(currentTeacher.id)] || {};
-
         return (
             <div style={{ maxWidth: '900px', margin: '0 auto' }}>
                 <Header isAdmin={false} />

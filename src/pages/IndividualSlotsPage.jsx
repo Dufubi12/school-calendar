@@ -72,15 +72,20 @@ const IndividualSlotsPage = () => {
         return t ? t.name : null;
     }, [isTeacher, currentUser, teachers]);
 
-    // List of teacher last-names that have data
+    // List of teacher last-names to display in the sidebar.
+    // Teacher: own entry only. Admin: ALL teachers from the `teachers` table,
+    // even those without any slot entries yet — so admin can navigate the
+    // whole roster and seed slots if needed.
     const teacherKeys = useMemo(() => {
-        const keys = Object.keys(slotsByTeacher).sort((a, b) => a.localeCompare(b, 'ru'));
         if (isTeacher && currentTeacherLastName) {
-            // Teacher sees only own entry (always include it, even if not yet in map)
             return [currentTeacherLastName];
         }
-        return keys;
-    }, [slotsByTeacher, isTeacher, currentTeacherLastName]);
+        // Admin: union of (teachers with slots) and (all teachers from roster)
+        const fromSlots = Object.keys(slotsByTeacher);
+        const fromRoster = teachers.map(t => t.name.split(' ')[0]);
+        const all = [...new Set([...fromSlots, ...fromRoster])];
+        return all.sort((a, b) => a.localeCompare(b, 'ru'));
+    }, [slotsByTeacher, isTeacher, currentTeacherLastName, teachers]);
 
     const [selectedTeacherKey, setSelectedTeacherKey] = useState(() => {
         if (currentTeacherLastName) return currentTeacherLastName;
@@ -97,12 +102,24 @@ const IndividualSlotsPage = () => {
 
     const readOnly = isAdmin && !isTeacher;
 
-    // If teacher has no entry yet — show an empty placeholder so they can start marking slots
+    // If selected teacher has no slot entry yet — show an empty placeholder
+    // (both for teachers viewing themselves and admins viewing any teacher
+    // from the roster).
     const selected = useMemo(() => {
         if (!selectedTeacherKey) return null;
         const existing = slotsByTeacher[selectedTeacherKey];
         if (existing) return existing;
-        // Fallback to empty entry for the current teacher
+        // Look up the teacher in the roster for full name + teacherId
+        const rosterMatch = teachers.find(t => t.name.split(' ')[0] === selectedTeacherKey);
+        if (rosterMatch) {
+            return {
+                teacherId: rosterMatch.id,
+                name: rosterMatch.name,
+                description: '',
+                slots: {},
+            };
+        }
+        // Fallback for teacher view if roster doesn't have them (shouldn't happen)
         if (isTeacher && selectedTeacherKey === currentTeacherLastName) {
             return {
                 name: currentTeacherFullName || currentTeacherLastName,
@@ -111,7 +128,7 @@ const IndividualSlotsPage = () => {
             };
         }
         return null;
-    }, [selectedTeacherKey, slotsByTeacher, isTeacher, currentTeacherLastName, currentTeacherFullName]);
+    }, [selectedTeacherKey, slotsByTeacher, teachers, isTeacher, currentTeacherLastName, currentTeacherFullName]);
 
     const getCellState = useCallback((day, timeKey) => {
         if (!selected) return 'default';
@@ -310,12 +327,14 @@ const IndividualSlotsPage = () => {
                         />
                         {teacherKeys.map(key => {
                             const t = slotsByTeacher[key];
+                            const rosterMatch = !t ? teachers.find(x => x.name.split(' ')[0] === key) : null;
+                            const displayName = t?.name || rosterMatch?.name || key;
                             const count = totalSlotsForTeacher(key);
                             const active = key === selectedTeacherKey;
                             return (
                                 <button
                                     key={key}
-                                    data-teacher-item={t.name}
+                                    data-teacher-item={displayName}
                                     onClick={() => setSelectedTeacherKey(key)}
                                     style={{
                                         width: '100%',
@@ -334,7 +353,7 @@ const IndividualSlotsPage = () => {
                                     }}
                                 >
                                     <span style={{ fontWeight: active ? 600 : 500, fontSize: '0.85rem' }}>
-                                        {t.name}
+                                        {displayName}
                                     </span>
                                     <span style={{
                                         fontSize: '0.7rem',

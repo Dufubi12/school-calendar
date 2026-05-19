@@ -319,9 +319,28 @@ const TeacherSchedulePage = () => {
                                         <Clock size={13} />
                                         <span>{new Date(inv.date + 'T00:00:00').toLocaleDateString('ru-RU', { weekday: 'short', day: '2-digit', month: '2-digit' })} · {inv.time}</span>
                                     </div>
-                                    <div style={{ fontWeight: 600, color: 'var(--color-primary-deep)' }}>
-                                        {inv.subject} · <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>{inv.grade}</span>
+                                    <div style={{ fontWeight: 600, color: 'var(--color-primary-deep)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                        {inv.lessonKind && (
+                                            <span style={{
+                                                padding: '2px 8px',
+                                                borderRadius: '6px',
+                                                fontSize: '0.7rem',
+                                                fontWeight: 700,
+                                                backgroundColor: 'var(--color-warning-bg)',
+                                                color: 'var(--color-warning)',
+                                                border: '1px solid var(--color-warning-border)'
+                                            }}>
+                                                {inv.lessonKind}
+                                            </span>
+                                        )}
+                                        <span>{inv.subject}</span>
+                                        <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>· {inv.grade}</span>
                                     </div>
+                                    {inv.studentName && (
+                                        <div style={{ fontSize: '0.85rem', color: 'var(--color-text-main)', marginTop: '4px' }}>
+                                            👤 Ученик: <strong>{inv.studentName}</strong>
+                                        </div>
+                                    )}
                                     {inv.note && (
                                         <div style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', marginTop: '4px' }}>
                                             💬 {inv.note}

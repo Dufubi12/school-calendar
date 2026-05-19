@@ -277,6 +277,8 @@ export async function loadInvitations() {
             subject: row.subject,
             grade: row.grade,
             note: row.note,
+            studentName: row.student_name || null,
+            lessonKind: row.lesson_kind || null,
             status: row.status,
             createdAt: row.created_at,
             respondedAt: row.responded_at,
@@ -287,7 +289,7 @@ export async function loadInvitations() {
     }
 }
 
-export async function createInvitation({ teacherId, teacherName, date, time, subject, grade, note }) {
+export async function createInvitation({ teacherId, teacherName, date, time, subject, grade, note, studentName, lessonKind }) {
     const { data, error } = await supabase
         .from('invitations')
         .insert({
@@ -298,6 +300,8 @@ export async function createInvitation({ teacherId, teacherName, date, time, sub
             subject,
             grade,
             note: note || null,
+            student_name: studentName || null,
+            lesson_kind: lessonKind || null,
             status: 'pending',
         })
         .select()

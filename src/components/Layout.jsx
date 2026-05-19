@@ -8,20 +8,37 @@ const Layout = () => {
     const { currentUser, isAdmin, isTeacher, logout } = useAuth();
     const location = useLocation();
     const [pendingCount, setPendingCount] = useState(0);
+    // For admin: count of recently answered (accepted/declined) invitations in last 24h
+    const [adminRecentResponses, setAdminRecentResponses] = useState(0);
 
-    // Poll pending invitations for current teacher (refresh every 30s + on focus)
+    // Poll invitations for badges (teacher: own pending, admin: recent responses)
     useEffect(() => {
-        if (!isTeacher || !currentUser?.teacherId) return;
+        // Reset counters when role context changes so a stale value can't linger
+        setPendingCount(0);
+        setAdminRecentResponses(0);
+
+        if (!isTeacher && !isAdmin) return;
         let cancelled = false;
-        const tid = currentUser.teacherId;
         const refresh = async () => {
             try {
                 const invs = await loadInvitations();
                 if (cancelled) return;
-                const count = (invs || []).filter(
-                    inv => inv.teacherId === tid && inv.status === 'pending'
-                ).length;
-                setPendingCount(count);
+                if (isTeacher && currentUser?.teacherId) {
+                    const tid = currentUser.teacherId;
+                    const count = (invs || []).filter(
+                        inv => inv.teacherId === tid && inv.status === 'pending'
+                    ).length;
+                    setPendingCount(count);
+                }
+                if (isAdmin) {
+                    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+                    const count = (invs || []).filter(
+                        inv => inv.status !== 'pending'
+                            && inv.respondedAt
+                            && inv.respondedAt >= dayAgo
+                    ).length;
+                    setAdminRecentResponses(count);
+                }
             } catch { /* ignore */ }
         };
         refresh();
@@ -33,7 +50,7 @@ const Layout = () => {
             clearInterval(id);
             window.removeEventListener('focus', onFocus);
         };
-    }, [isTeacher, currentUser]);
+    }, [isTeacher, isAdmin, currentUser]);
 
     const linkStyle = (path) => {
         const active = location.pathname === path;
@@ -140,12 +157,19 @@ const Layout = () => {
                         justifyContent: 'center'
                     }}>
                         {links.map(({ to, label, icon: Icon }) => {
-                            // Show pending count badge on teacher's "Моё расписание"
-                            const showBadge = isTeacher && to === '/teacher-schedule' && pendingCount > 0;
+                            // Teacher: pending count on "Моё расписание"
+                            // Admin: recent responses (last 24h) on "Приглашения"
+                            // Mutually exclusive by role — explicit branch (no truthy OR collision risk).
+                            let badge = null;
+                            if (isAdmin && to === '/invitations' && adminRecentResponses > 0) {
+                                badge = adminRecentResponses;
+                            } else if (isTeacher && to === '/teacher-schedule' && pendingCount > 0) {
+                                badge = pendingCount;
+                            }
                             return (
                                 <Link key={to} to={to} style={linkStyle(to)}>
                                     <Icon size={15} /> {label}
-                                    {showBadge && (
+                                    {badge && (
                                         <span style={{
                                             display: 'inline-flex',
                                             alignItems: 'center',
@@ -160,7 +184,7 @@ const Layout = () => {
                                             fontWeight: 700,
                                             marginLeft: '2px'
                                         }}>
-                                            {pendingCount}
+                                            {badge}
                                         </span>
                                     )}
                                 </Link>

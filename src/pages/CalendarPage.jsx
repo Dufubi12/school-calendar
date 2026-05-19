@@ -22,6 +22,7 @@ const CalendarPage = () => {
     const [selectedClass, setSelectedClass] = useState('all'); // 'all' or specific class like '7А'
     const [selectedTeacher, setSelectedTeacher] = useState('all'); // 'all' or teacher last name
     const [roleFilter, setRoleFilter] = useState('all'); // 'all' | 'teachers' | 'tutors'
+    const [kindFilter, setKindFilter] = useState('all'); // 'all' | 'group' | 'individual'
 
     // Available classes
     const availableClasses = ['all', '1А', '1Б', '2А', '2Б', '2В', '3А', '3Б', '3В', '4А', '4Б', '4В', '5А', '5Б', '5В', '6А', '6Б', '7А', '7Б', '8А', '9А'];
@@ -77,11 +78,22 @@ const CalendarPage = () => {
                     className: inv.grade,
                     teacher: lastName,
                     teacherName: inv.teacherName,
+                    lessonKind: inv.lessonKind || null,
+                    studentName: inv.studentName || null,
                     details: `${inv.status === 'pending' ? '⏳ Предложено' : 'Замена'}: ${inv.subject}`
                 };
             });
-        return [...events, ...invEvents];
-    }, [events, invitations, teachers]);
+
+        const merged = [...events, ...invEvents];
+
+        // Apply kind filter (group vs individual)
+        if (kindFilter === 'all') return merged;
+        const INDIVIDUAL_KINDS = new Set(['ИЗ', 'ИМ', 'ОГЭ', 'ЕГЭ']);
+        return merged.filter(ev => {
+            const isInd = INDIVIDUAL_KINDS.has(ev.lessonKind);
+            return kindFilter === 'individual' ? isInd : !isInd;
+        });
+    }, [events, invitations, teachers, kindFilter]);
 
     // Last names of teachers allowed by current role filter (null = no role filter)
     const allowedTeacherLastNames = useMemo(() => {
@@ -172,6 +184,47 @@ const CalendarPage = () => {
                             </option>
                         ))}
                     </select>
+                </div>
+
+                {/* Kind Filter: Все / Групповые / Индивидуальные */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '12px' }}>
+                    <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-muted)' }}>
+                        🎯 Тип
+                    </label>
+                    <div style={{
+                        display: 'inline-flex',
+                        padding: '3px',
+                        borderRadius: 'var(--radius)',
+                        border: '1px solid var(--color-border)',
+                        backgroundColor: 'var(--color-bg-tint)'
+                    }}>
+                        {[
+                            { id: 'all', label: 'Все' },
+                            { id: 'group', label: 'Групповые' },
+                            { id: 'individual', label: 'Инд.' },
+                        ].map(opt => {
+                            const active = kindFilter === opt.id;
+                            return (
+                                <button
+                                    key={opt.id}
+                                    onClick={() => setKindFilter(opt.id)}
+                                    style={{
+                                        padding: '5px 12px',
+                                        borderRadius: 'var(--radius-sm)',
+                                        border: 'none',
+                                        backgroundColor: active ? 'var(--color-primary)' : 'transparent',
+                                        color: active ? '#fff' : 'var(--color-text-muted)',
+                                        cursor: 'pointer',
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        boxShadow: active ? 'var(--shadow-xs)' : 'none'
+                                    }}
+                                >
+                                    {opt.label}
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
 
                 {/* Teacher Filter (label + role tabs + select) */}

@@ -44,10 +44,23 @@ const mapDbRow = (row) => ({
     subject: row.subject,
     grade: row.grade,
     note: row.note,
+    studentName: row.student_name || null,
+    lessonKind: row.lesson_kind || null,
     status: row.status,
     createdAt: row.created_at,
     respondedAt: row.responded_at,
 });
+
+const LESSON_KINDS = ['Групповой', 'ИЗ', 'ИМ', 'ОГЭ', 'ЕГЭ', 'Другое'];
+
+const LESSON_KIND_STYLES = {
+    'Групповой':  { bg: '#dbeafe', color: '#1e40af' },
+    'ИЗ':         { bg: '#fef3c7', color: '#92400e' },
+    'ИМ':         { bg: '#ede9fe', color: '#6b21a8' },
+    'ОГЭ':        { bg: '#fce7f3', color: '#9d174d' },
+    'ЕГЭ':        { bg: '#ffe4e6', color: '#9f1239' },
+    'Другое':     { bg: '#e5e7eb', color: '#374151' },
+};
 
 const formatDate = (dateStr) => {
     try {
@@ -153,10 +166,26 @@ const InvitationCard = ({ invitation, isAdminView, onDelete, onAccept, onDecline
             <div style={{
                 fontSize: '0.9rem',
                 color: '#374151',
-                marginBottom: '8px'
+                marginBottom: '8px',
+                display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap'
             }}>
+                {invitation.lessonKind && LESSON_KIND_STYLES[invitation.lessonKind] && (
+                    <span style={{
+                        padding: '2px 8px',
+                        borderRadius: '6px',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        backgroundColor: LESSON_KIND_STYLES[invitation.lessonKind].bg,
+                        color: LESSON_KIND_STYLES[invitation.lessonKind].color
+                    }}>
+                        {invitation.lessonKind}
+                    </span>
+                )}
                 <strong>{invitation.subject}</strong>
-                <span style={{ color: '#6b7280', marginLeft: '8px' }}>· {invitation.grade}</span>
+                <span style={{ color: '#6b7280' }}>· {invitation.grade}</span>
+                {invitation.studentName && (
+                    <span style={{ color: '#6b7280' }}>· 👤 {invitation.studentName}</span>
+                )}
             </div>
 
             {invitation.note && (
@@ -261,10 +290,14 @@ const CreateInvitationModal = ({ teachers, bellSchedule, existingInvitations, on
     const [subject, setSubject] = useState('');
     const [grade, setGrade] = useState('');
     const [note, setNote] = useState('');
+    const [studentName, setStudentName] = useState('');
+    const [lessonKind, setLessonKind] = useState('Групповой');
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [availability, setAvailability] = useState({});
     const [forceCreate, setForceCreate] = useState(false);
+
+    const isIndividual = lessonKind !== 'Групповой' && lessonKind !== 'Другое';
 
     // Load availability once for conflict check
     useEffect(() => {
@@ -378,7 +411,9 @@ const CreateInvitationModal = ({ teachers, bellSchedule, existingInvitations, on
                 time,
                 subject: subject.trim(),
                 grade: grade.trim(),
-                note: note.trim()
+                note: note.trim(),
+                studentName: isIndividual ? studentName.trim() : null,
+                lessonKind: lessonKind === 'Групповой' ? null : lessonKind,
             });
         } catch (err) {
             console.error('Failed to create invitation:', err);
@@ -516,6 +551,38 @@ const CreateInvitationModal = ({ teachers, bellSchedule, existingInvitations, on
                         </div>
                     </div>
 
+                    <div>
+                        <label style={{ fontSize: '0.85rem', fontWeight: 500, marginBottom: '4px', display: 'block' }}>
+                            Тип занятия
+                        </label>
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            {LESSON_KINDS.map(k => {
+                                const active = lessonKind === k;
+                                const s = LESSON_KIND_STYLES[k];
+                                return (
+                                    <button
+                                        key={k}
+                                        type="button"
+                                        onClick={() => setLessonKind(k)}
+                                        style={{
+                                            padding: '6px 12px',
+                                            borderRadius: 'var(--radius)',
+                                            border: '2px solid',
+                                            borderColor: active ? s.color : 'transparent',
+                                            backgroundColor: active ? s.bg : 'var(--color-bg-tint)',
+                                            color: active ? s.color : 'var(--color-text-muted)',
+                                            fontSize: '0.8rem',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        {k}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
                     <div style={{ display: 'flex', gap: '12px' }}>
                         <div style={{ flex: 1 }}>
                             <label style={{ fontSize: '0.85rem', fontWeight: 500, marginBottom: '4px', display: 'block' }}>
@@ -538,7 +605,7 @@ const CreateInvitationModal = ({ teachers, bellSchedule, existingInvitations, on
                         </div>
                         <div style={{ flex: 1 }}>
                             <label style={{ fontSize: '0.85rem', fontWeight: 500, marginBottom: '4px', display: 'block' }}>
-                                Класс *
+                                {isIndividual ? 'Класс ученика *' : 'Класс *'}
                             </label>
                             <input
                                 type="text"
@@ -556,6 +623,28 @@ const CreateInvitationModal = ({ teachers, bellSchedule, existingInvitations, on
                             />
                         </div>
                     </div>
+
+                    {isIndividual && (
+                        <div>
+                            <label style={{ fontSize: '0.85rem', fontWeight: 500, marginBottom: '4px', display: 'block' }}>
+                                ФИ ученика
+                            </label>
+                            <input
+                                type="text"
+                                value={studentName}
+                                onChange={(e) => setStudentName(e.target.value)}
+                                placeholder="Иванов Иван"
+                                style={{
+                                    width: '100%',
+                                    padding: '8px 12px',
+                                    borderRadius: '8px',
+                                    border: '2px solid #e5e7eb',
+                                    fontSize: '0.9rem',
+                                    boxSizing: 'border-box'
+                                }}
+                            />
+                        </div>
+                    )}
 
                     <div>
                         <label style={{ fontSize: '0.85rem', fontWeight: 500, marginBottom: '4px', display: 'block' }}>

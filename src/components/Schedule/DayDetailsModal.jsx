@@ -1,10 +1,89 @@
-import React from 'react';
-import { X, Plus, UserX, Trash2, Users } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { X, Plus, UserX, Trash2, Users, Ban } from 'lucide-react';
 import { format } from 'date-fns';
 import { useSchedule } from '../../context/ScheduleContext';
+import { loadIndividualSlots, loadAvailability } from '../../lib/api';
+
+const DAY_FULL_RU_FROM_DOW = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
 
 const DayDetailsModal = ({ date, isOpen, onClose, lessons = [], selectedClass = 'all', selectedTeacher = 'all', allowedTeacherLastNames = null, onAddLesson, onAddSubstitution, onAddClub, onRemoveLesson }) => {
     const { teachers } = useSchedule();
+
+    // Grey-zone: load busy slots for the day so admin sees what's already blocked
+    const [busySlots, setBusySlots] = useState([]); // [{time, reason}]
+    useEffect(() => {
+        if (!isOpen || !date) {
+            setBusySlots([]);
+            return;
+        }
+        let cancelled = false;
+        const dateStr = format(date, 'yyyy-MM-dd');
+        const dayCode = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'][date.getDay()];
+        const dayFull = DAY_FULL_RU_FROM_DOW[date.getDay()];
+
+        (async () => {
+            try {
+                const [iz, av] = await Promise.all([
+                    loadIndividualSlots(teachers),
+                    loadAvailability(),
+                ]);
+                if (cancelled) return;
+                const collected = [];
+
+                // Determine which teachers to inspect
+                const targetTeachers = selectedTeacher !== 'all'
+                    ? teachers.filter(t => t.name === selectedTeacher || t.name.split(' ')[0] === selectedTeacher)
+                    : teachers;
+
+                targetTeachers.forEach(t => {
+                    const lastName = t.name.split(' ')[0];
+                    const entry = iz[lastName];
+
+                    // Recurring busy IZ slots active on this date
+                    (entry?.recurringVersions || []).forEach(v => {
+                        if (v.status !== 'busy') return;
+                        if (v.day !== dayCode) return;
+                        if (v.effective_from && dateStr < v.effective_from) return;
+                        if (v.effective_to && dateStr > v.effective_to) return;
+                        collected.push({
+                            teacher: t.name,
+                            time: v.time_slot,
+                            reason: `ИЗ (постоянный, ${v.approval_status === 'pending' ? 'на согласовании' : 'действует'})`,
+                        });
+                    });
+
+                    // Single-date busy events
+                    (entry?.singleEvents || []).forEach(ev => {
+                        if (ev.status !== 'busy') return;
+                        if (ev.single_date !== dateStr) return;
+                        collected.push({
+                            teacher: t.name,
+                            time: ev.time_slot,
+                            reason: `ИЗ (разовое, ${ev.approval_status === 'pending' ? 'на согласовании' : 'действует'})`,
+                        });
+                    });
+
+                    // "Мои слоты" busy on this day
+                    const avDay = av[String(t.id)]?.[dayFull] || {};
+                    Object.entries(avDay).forEach(([timeKey, status]) => {
+                        if (status !== 'busy') return;
+                        collected.push({
+                            teacher: t.name,
+                            time: timeKey,
+                            reason: 'Отмечен «занят» в «Моих слотах»',
+                        });
+                    });
+                });
+
+                // Sort by time
+                collected.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+                setBusySlots(collected);
+            } catch {
+                if (!cancelled) setBusySlots([]);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [isOpen, date, selectedTeacher, teachers]);
 
     if (!isOpen) return null;
 
@@ -191,6 +270,40 @@ const DayDetailsModal = ({ date, isOpen, onClose, lessons = [], selectedClass = 
                         </div>
                     )}
                 </div>
+
+                {/* Grey zone — slots already blocked for the selected teacher(s) */}
+                {busySlots.length > 0 && (
+                    <div style={{
+                        marginBottom: '1.25rem',
+                        padding: '12px 14px',
+                        borderRadius: 'var(--radius)',
+                        backgroundColor: '#f1f5f9',
+                        border: '1px dashed #cbd5e1'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', color: '#475569', fontSize: '0.82rem', fontWeight: 600 }}>
+                            <Ban size={14} />
+                            Серая зона — слоты {selectedTeacher !== 'all' ? `${selectedTeacher}, ` : ''}на которые уже нельзя назначать
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            {busySlots.map((b, i) => (
+                                <div key={i} style={{
+                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                    fontSize: '0.78rem', color: '#475569',
+                                    padding: '4px 8px',
+                                    backgroundColor: '#fff',
+                                    border: '1px solid #e2e8f0',
+                                    borderRadius: '4px',
+                                }}>
+                                    <span style={{ fontWeight: 600 }}>{b.time}</span>
+                                    {selectedTeacher === 'all' && (
+                                        <span style={{ fontSize: '0.72rem', color: '#64748b' }}>{b.teacher}</span>
+                                    )}
+                                    <span style={{ fontSize: '0.72rem', color: '#64748b', fontStyle: 'italic' }}>{b.reason}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 <div style={{ display: 'flex', gap: '0.75rem', borderTop: '1px solid var(--color-border)', paddingTop: '1rem', flexWrap: 'wrap' }}>
                     <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => { onClose(); onAddLesson(); }}>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { nextMonth, prevMonth } from '../utils/dateUtils';
 import CalendarHeader from '../components/Calendar/CalendarHeader';
 import CalendarGrid from '../components/Calendar/CalendarGrid';

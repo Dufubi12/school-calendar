@@ -63,13 +63,14 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
         console.log('[Auth] useEffect starting...');
         let mounted = true;
+        // Safety timeout: if Supabase getSession() hangs, just finish loading state.
+        // DO NOT clear session — that would log the user out unexpectedly.
         let timeout = setTimeout(() => {
-            console.warn('[Auth] TIMEOUT - forcing complete after 5s');
+            console.warn('[Auth] TIMEOUT after 5s — releasing loading state (keeping session)');
             if (mounted) {
                 setLoading(false);
-                setSession(null);
             }
-        }, 5000); // 5 second timeout - more aggressive
+        }, 5000);
 
         const initAuth = async () => {
             try {
@@ -104,12 +105,26 @@ export const AuthProvider = ({ children }) => {
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
             console.log('[Auth] onAuthStateChange:', _event, session?.user?.email);
             if (!mounted) return;
-            setSession(session);
-            if (session?.user) {
-                await loadProfile(session.user.id, session.user.email);
-            } else {
+
+            // Only clear session on explicit sign-out — refresh failures/etc shouldn't log the user out
+            if (_event === 'SIGNED_OUT') {
+                setSession(null);
                 setProfile(null);
+                return;
             }
+
+            // For SIGNED_IN / TOKEN_REFRESHED / INITIAL_SESSION with a real session — update
+            if (session) {
+                setSession(session);
+                if (session.user) {
+                    // Only reload profile if user changed or we don't have one yet
+                    // (TOKEN_REFRESHED keeps the same user — no need to refetch)
+                    if (_event === 'SIGNED_IN' || _event === 'INITIAL_SESSION') {
+                        await loadProfile(session.user.id, session.user.email);
+                    }
+                }
+            }
+            // If session is null but event isn't SIGNED_OUT — ignore (keep existing state)
         });
 
         return () => {

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSchedule } from '../context/ScheduleContext';
 import { GraduationCap, Check, X, Info, Plus, Trash2 } from 'lucide-react';
-import { loadIndividualSlots, saveIndividualSlot, createSingleIndividualSlot, createRecurringIndividualSlot, deleteIndividualSlot, loadAvailability, loadInvitations } from '../lib/api';
+import { loadIndividualSlots, saveIndividualSlot, createSingleIndividualSlot, createRecurringIndividualSlot, deleteIndividualSlot, loadAvailability, loadInvitations, setIzSlotApproval } from '../lib/api';
 import { REAL_SCHEDULE } from '../data/mockData';
 
 const DAY_FULL_RU = {
@@ -135,6 +135,11 @@ const IndividualSlotsPage = () => {
         return selected.slots?.[day]?.[timeKey] || 'default';
     }, [selected]);
 
+    const getCellApproval = useCallback((day, timeKey) => {
+        if (!selected) return null;
+        return selected.slotMeta?.[day]?.[timeKey] || null;
+    }, [selected]);
+
     // Check if this cell is occupied by something else (school lesson, availability busy, accepted invitation)
     // Returns string reason or null
     const getOccupiedReason = useCallback((day, timeKey) => {
@@ -199,7 +204,7 @@ const IndividualSlotsPage = () => {
 
         // Persist to Supabase
         try {
-            await saveIndividualSlot(teacherId, day, timeKey, nextStatus);
+            await saveIndividualSlot(teacherId, day, timeKey, nextStatus, isAdmin);
         } catch (err) {
             console.error('Failed to save IZ slot, reverting', err);
             setSlotsByTeacher(prevState);
@@ -226,9 +231,9 @@ const IndividualSlotsPage = () => {
         const timeSlot = `${startTime}-${endTime}`;
         try {
             if (recurring) {
-                await createRecurringIndividualSlot({ teacherId, day, timeSlot, status: 'busy' });
+                await createRecurringIndividualSlot({ teacherId, day, timeSlot, status: 'busy', byAdmin: isAdmin });
             } else {
-                await createSingleIndividualSlot({ teacherId, date, timeSlot, status: 'busy' });
+                await createSingleIndividualSlot({ teacherId, date, timeSlot, status: 'busy', byAdmin: isAdmin });
             }
             await reloadSlots();
             setShowAddModal(false);
@@ -237,6 +242,22 @@ const IndividualSlotsPage = () => {
             alert('Не удалось добавить слот: ' + (err?.message || 'неизвестная ошибка'));
         }
     }, [selectedTeacherKey, slotsByTeacher, teachers, reloadSlots]);
+
+    // Admin reviewer: approve or reject a slot (recurring or single-date)
+    const handleReview = useCallback(async (slotId, decision) => {
+        if (!slotId) return;
+        let note = null;
+        if (decision === 'rejected') {
+            note = window.prompt('Комментарий для педагога (необязательно):', '') || null;
+        }
+        try {
+            await setIzSlotApproval(slotId, decision, note);
+            await reloadSlots();
+        } catch (err) {
+            console.error('Failed to review slot:', err);
+            alert('Не удалось сохранить решение: ' + (err?.message || 'неизвестная ошибка'));
+        }
+    }, [reloadSlots]);
 
     // Delete a single-date slot by id
     const handleDeleteSingle = useCallback(async (id) => {
@@ -422,33 +443,60 @@ const IndividualSlotsPage = () => {
                                             {selected.singleEvents
                                                 .slice()
                                                 .sort((a, b) => (a.single_date + a.time_slot).localeCompare(b.single_date + b.time_slot))
-                                                .map(ev => (
-                                                    <span key={ev.id} style={{
-                                                        display: 'inline-flex', alignItems: 'center', gap: '6px',
-                                                        padding: '5px 10px',
-                                                        borderRadius: 'var(--radius-pill)',
-                                                        backgroundColor: ev.status === 'busy' ? 'var(--color-danger-bg)' : 'var(--color-success-bg)',
-                                                        color: ev.status === 'busy' ? 'var(--color-danger)' : 'var(--color-success)',
-                                                        border: `1px solid ${ev.status === 'busy' ? 'var(--color-danger-border)' : 'var(--color-success-border)'}`,
-                                                        fontSize: '0.78rem',
-                                                        fontWeight: 500
-                                                    }}>
-                                                        📅 {new Date(ev.single_date + 'T00:00:00').toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })} · {ev.time_slot}
-                                                        {!readOnly && (
-                                                            <button
-                                                                onClick={() => handleDeleteSingle(ev.id)}
-                                                                style={{
-                                                                    background: 'none', border: 'none', cursor: 'pointer',
-                                                                    padding: 0, color: 'inherit', opacity: 0.6,
-                                                                    display: 'inline-flex', alignItems: 'center'
-                                                                }}
-                                                                title="Удалить"
-                                                            >
-                                                                <Trash2 size={12} />
-                                                            </button>
-                                                        )}
-                                                    </span>
-                                                ))}
+                                                .map(ev => {
+                                                    const pending = ev.approval_status === 'pending';
+                                                    const rejected = ev.approval_status === 'rejected';
+                                                    const tipParts = [];
+                                                    if (pending) tipParts.push('⏳ Ожидает подтверждения');
+                                                    if (rejected) tipParts.push(`✕ Отклонено${ev.approval_note ? ': ' + ev.approval_note : ''}`);
+                                                    return (
+                                                        <span key={ev.id} style={{
+                                                            display: 'inline-flex', alignItems: 'center', gap: '6px',
+                                                            padding: '5px 10px',
+                                                            borderRadius: 'var(--radius-pill)',
+                                                            backgroundColor: ev.status === 'busy' ? 'var(--color-danger-bg)' : 'var(--color-success-bg)',
+                                                            color: ev.status === 'busy' ? 'var(--color-danger)' : 'var(--color-success)',
+                                                            border: `${pending || rejected ? '2px dashed' : '1px solid'} ${pending ? '#fbbf24' : rejected ? '#ef4444' : (ev.status === 'busy' ? 'var(--color-danger-border)' : 'var(--color-success-border)')}`,
+                                                            fontSize: '0.78rem',
+                                                            fontWeight: 500
+                                                        }} title={tipParts.join(' · ')}>
+                                                            📅 {new Date(ev.single_date + 'T00:00:00').toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })} · {ev.time_slot}
+                                                            {pending && <span style={{ fontSize: '0.7rem' }}>⏳</span>}
+                                                            {rejected && <span style={{ fontSize: '0.7rem' }}>✕</span>}
+                                                            {isAdmin && pending && (
+                                                                <>
+                                                                    <button
+                                                                        onClick={() => handleReview(ev.id, 'approved')}
+                                                                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--color-success)' }}
+                                                                        title="Подтвердить"
+                                                                    >
+                                                                        <Check size={14} />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleReview(ev.id, 'rejected')}
+                                                                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--color-danger)' }}
+                                                                        title="Отклонить"
+                                                                    >
+                                                                        <X size={14} />
+                                                                    </button>
+                                                                </>
+                                                            )}
+                                                            {!readOnly && (
+                                                                <button
+                                                                    onClick={() => handleDeleteSingle(ev.id)}
+                                                                    style={{
+                                                                        background: 'none', border: 'none', cursor: 'pointer',
+                                                                        padding: 0, color: 'inherit', opacity: 0.6,
+                                                                        display: 'inline-flex', alignItems: 'center'
+                                                                    }}
+                                                                    title="Удалить"
+                                                                >
+                                                                    <Trash2 size={12} />
+                                                                </button>
+                                                            )}
+                                                        </span>
+                                                    );
+                                                })}
                                         </div>
                                     </div>
                                 )}
@@ -477,9 +525,34 @@ const IndividualSlotsPage = () => {
                                                 </td>
                                                 {DAYS.map(day => {
                                                     const state = getCellState(day, slot);
+                                                    const meta = getCellApproval(day, slot);
                                                     const occupiedReason = getOccupiedReason(day, slot);
                                                     const isOccupied = !!occupiedReason && state === 'default';
                                                     const clickable = !readOnly && !isOccupied;
+                                                    const pending = meta?.approval_status === 'pending';
+                                                    const rejected = meta?.approval_status === 'rejected';
+                                                    const approvalIcon = pending ? '⏳' : rejected ? '✕' : null;
+                                                    const approvalTitle = pending
+                                                        ? 'Ожидает подтверждения админа'
+                                                        : rejected
+                                                            ? `Отклонено${meta?.approval_note ? ': ' + meta.approval_note : ''}`
+                                                            : '';
+                                                    const baseStyle = cellStyle(state, clickable);
+                                                    const borderTint = pending ? '#fbbf24' : rejected ? '#ef4444' : null;
+                                                    const styled = borderTint ? { ...baseStyle, border: `2px dashed ${borderTint}` } : baseStyle;
+
+                                                    const renderInside = () => (
+                                                        <>
+                                                            {state === 'free' && (<><Check size={12} /> своб.</>)}
+                                                            {state === 'busy' && (<><X size={12} /> занят</>)}
+                                                            {state === 'default' && '—'}
+                                                            {approvalIcon && (
+                                                                <span style={{ marginLeft: '4px', fontSize: '0.7rem' }} title={approvalTitle}>
+                                                                    {approvalIcon}
+                                                                </span>
+                                                            )}
+                                                        </>
+                                                    );
                                                     return (
                                                         <td key={day} style={{ padding: '4px 6px', borderBottom: '1px solid #e2e8f0' }}>
                                                             {isOccupied ? (
@@ -500,19 +573,50 @@ const IndividualSlotsPage = () => {
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => cycleCell(day, slot)}
-                                                                    style={cellStyle(state, true)}
+                                                                    style={styled}
+                                                                    title={approvalTitle || undefined}
                                                                     aria-label={`${day} ${slot}: ${state === 'free' ? 'свободно' : state === 'busy' ? 'занят' : 'не указано'}`}
                                                                 >
-                                                                    {state === 'free' && (<><Check size={12} /> своб.</>)}
-                                                                    {state === 'busy' && (<><X size={12} /> занят</>)}
-                                                                    {state === 'default' && '—'}
+                                                                    {renderInside()}
                                                                 </button>
                                                             ) : (
-                                                                <span style={cellStyle(state, false)}>
-                                                                    {state === 'free' && (<><Check size={12} /> своб.</>)}
-                                                                    {state === 'busy' && (<><X size={12} /> занят</>)}
-                                                                    {state === 'default' && '—'}
+                                                                <span style={styled} title={approvalTitle || undefined}>
+                                                                    {renderInside()}
                                                                 </span>
+                                                            )}
+                                                            {isAdmin && pending && meta?.id && (
+                                                                <div style={{ display: 'flex', gap: '4px', marginTop: '4px', justifyContent: 'center' }}>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleReview(meta.id, 'approved')}
+                                                                        title="Подтвердить"
+                                                                        style={{
+                                                                            padding: '2px 6px', fontSize: '0.65rem',
+                                                                            backgroundColor: 'var(--color-success-bg)',
+                                                                            color: 'var(--color-success)',
+                                                                            border: '1px solid var(--color-success-border)',
+                                                                            borderRadius: '4px', cursor: 'pointer',
+                                                                            display: 'inline-flex', alignItems: 'center', gap: '2px'
+                                                                        }}
+                                                                    >
+                                                                        ✓
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleReview(meta.id, 'rejected')}
+                                                                        title="Отклонить"
+                                                                        style={{
+                                                                            padding: '2px 6px', fontSize: '0.65rem',
+                                                                            backgroundColor: 'var(--color-danger-bg)',
+                                                                            color: 'var(--color-danger)',
+                                                                            border: '1px solid var(--color-danger-border)',
+                                                                            borderRadius: '4px', cursor: 'pointer',
+                                                                            display: 'inline-flex', alignItems: 'center', gap: '2px'
+                                                                        }}
+                                                                    >
+                                                                        ✕
+                                                                    </button>
+                                                                </div>
                                                             )}
                                                         </td>
                                                     );

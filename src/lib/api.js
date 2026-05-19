@@ -362,6 +362,7 @@ export async function respondToInvitation(id, status) {
                     date,
                     timeSlot: inv.time_slot,
                     status: 'busy',
+                    byAdmin: true, // auto-block from accepted invitation skips moderation
                 }).catch(err => {
                     console.warn('[respondToInvitation] auto-block slot failed for', date, err?.message);
                 })
@@ -408,7 +409,7 @@ export async function countRecentIzChanges(hours = 24) {
 export async function loadIndividualSlots(teachers = []) {
     try {
         const [slotsRes, descRes] = await Promise.all([
-            supabase.from('individual_slots').select('id, teacher_id, day, time_slot, status, single_date'),
+            supabase.from('individual_slots').select('id, teacher_id, day, time_slot, status, single_date, approval_status, approval_note, approved_at'),
             supabase.from('individual_slot_descriptions').select('teacher_id, description'),
         ]);
         const result = {};
@@ -425,6 +426,7 @@ export async function loadIndividualSlots(teachers = []) {
                     name: t ? t.name : lastName,
                     description: descByTeacher[teacher_id] || '',
                     slots: {},
+                    slotMeta: {}, // { day: { time: { id, approval_status, approval_note } } }
                     singleEvents: [],
                 };
             }
@@ -439,10 +441,18 @@ export async function loadIndividualSlots(teachers = []) {
                     single_date: row.single_date,
                     time_slot: row.time_slot,
                     status: row.status,
+                    approval_status: row.approval_status || 'approved',
+                    approval_note: row.approval_note || null,
                 });
             } else {
                 if (!entry.slots[row.day]) entry.slots[row.day] = {};
+                if (!entry.slotMeta[row.day]) entry.slotMeta[row.day] = {};
                 entry.slots[row.day][row.time_slot] = row.status;
+                entry.slotMeta[row.day][row.time_slot] = {
+                    id: row.id,
+                    approval_status: row.approval_status || 'approved',
+                    approval_note: row.approval_note || null,
+                };
             }
         });
 
@@ -460,7 +470,8 @@ export async function loadIndividualSlots(teachers = []) {
 
 // Save / clear a recurring slot. PostgREST cannot upsert against a partial
 // unique index, so we do an explicit select → update-or-insert.
-export async function saveIndividualSlot(teacherId, day, timeSlot, status) {
+// `byAdmin=true` marks the change as already approved (no admin moderation needed).
+export async function saveIndividualSlot(teacherId, day, timeSlot, status, byAdmin = false) {
     if (status === null || status === undefined) {
         const { error } = await supabase
             .from('individual_slots')
@@ -470,6 +481,8 @@ export async function saveIndividualSlot(teacherId, day, timeSlot, status) {
         if (error) throw error;
         return;
     }
+
+    const approval_status = byAdmin ? 'approved' : 'pending';
 
     const { data: existing, error: selErr } = await supabase
         .from('individual_slots')
@@ -484,7 +497,13 @@ export async function saveIndividualSlot(teacherId, day, timeSlot, status) {
     if (existing) {
         const { error } = await supabase
             .from('individual_slots')
-            .update({ status, updated_at: new Date().toISOString() })
+            .update({
+                status,
+                approval_status,
+                approval_note: null,
+                approved_at: byAdmin ? new Date().toISOString() : null,
+                updated_at: new Date().toISOString(),
+            })
             .eq('id', existing.id);
         if (error) throw error;
     } else {
@@ -496,14 +515,17 @@ export async function saveIndividualSlot(teacherId, day, timeSlot, status) {
                 time_slot: timeSlot,
                 status,
                 single_date: null,
+                approval_status,
+                approved_at: byAdmin ? new Date().toISOString() : null,
             });
         if (error) throw error;
     }
 }
 
 // Create a single-date one-off event
-export async function createSingleIndividualSlot({ teacherId, date, timeSlot, status = 'busy' }) {
+export async function createSingleIndividualSlot({ teacherId, date, timeSlot, status = 'busy', byAdmin = false }) {
     const dow = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'][new Date(date + 'T00:00:00').getDay()];
+    const approval_status = byAdmin ? 'approved' : 'pending';
     const { data, error } = await supabase
         .from('individual_slots')
         .insert({
@@ -512,6 +534,8 @@ export async function createSingleIndividualSlot({ teacherId, date, timeSlot, st
             time_slot: timeSlot,
             status,
             single_date: date,
+            approval_status,
+            approved_at: byAdmin ? new Date().toISOString() : null,
         })
         .select()
         .single();
@@ -521,8 +545,53 @@ export async function createSingleIndividualSlot({ teacherId, date, timeSlot, st
 
 // Create a recurring slot with arbitrary day/time (used by "+ свой слот")
 // Uses the same select → update-or-insert pattern as saveIndividualSlot
-export async function createRecurringIndividualSlot({ teacherId, day, timeSlot, status = 'busy' }) {
-    return saveIndividualSlot(teacherId, day, timeSlot, status);
+export async function createRecurringIndividualSlot({ teacherId, day, timeSlot, status = 'busy', byAdmin = false }) {
+    return saveIndividualSlot(teacherId, day, timeSlot, status, byAdmin);
+}
+
+// Admin approves or rejects an IZ slot
+export async function setIzSlotApproval(slotId, status, note = null) {
+    if (!['approved', 'rejected'].includes(status)) throw new Error('Invalid approval status');
+    const { error } = await supabase
+        .from('individual_slots')
+        .update({
+            approval_status: status,
+            approval_note: note,
+            approved_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        })
+        .eq('id', slotId);
+    if (error) throw error;
+}
+
+// Count pending IZ slots (for admin nav badge)
+export async function countPendingIzSlots() {
+    const { count, error } = await supabase
+        .from('individual_slots')
+        .select('id', { count: 'exact', head: true })
+        .eq('approval_status', 'pending');
+    if (error) {
+        console.warn('[countPendingIzSlots] failed:', error.message);
+        return 0;
+    }
+    return count || 0;
+}
+
+// Count recent admin decisions on a teacher's IZ slots (for teacher nav badge)
+export async function countRecentIzDecisions(teacherId, hours = 24) {
+    if (!teacherId) return 0;
+    const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+    const { count, error } = await supabase
+        .from('individual_slots')
+        .select('id', { count: 'exact', head: true })
+        .eq('teacher_id', teacherId)
+        .in('approval_status', ['approved', 'rejected'])
+        .gte('approved_at', since);
+    if (error) {
+        console.warn('[countRecentIzDecisions] failed:', error.message);
+        return 0;
+    }
+    return count || 0;
 }
 
 // Delete a single event by id

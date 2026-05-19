@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { Calendar, Users, BarChart3, Wrench, UserCheck, ClipboardCheck, LogOut, CalendarClock, Mail, Tag, GraduationCap, Sprout, Wallet } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { loadInvitations, countRecentIzChanges } from '../lib/api';
+import { loadInvitations, countPendingIzSlots, countRecentIzDecisions } from '../lib/api';
 
 const Layout = () => {
     const { currentUser, isAdmin, isTeacher, logout } = useAuth();
@@ -10,15 +10,18 @@ const Layout = () => {
     const [pendingCount, setPendingCount] = useState(0);
     // For admin: count of recently answered (accepted/declined) invitations in last 24h
     const [adminRecentResponses, setAdminRecentResponses] = useState(0);
-    // For admin: count of teachers whose IZ slots changed in last 24h
-    const [adminRecentIzChanges, setAdminRecentIzChanges] = useState(0);
+    // For admin: count of IZ slots currently in 'pending' approval status
+    const [adminPendingIzSlots, setAdminPendingIzSlots] = useState(0);
+    // For teacher: count of admin decisions on own IZ slots in last 24h
+    const [teacherRecentIzDecisions, setTeacherRecentIzDecisions] = useState(0);
 
-    // Poll badges (teacher: own pending invitations; admin: recent invitation responses + IZ slot changes)
+    // Poll badges
     useEffect(() => {
         // Reset counters when role context changes so a stale value can't linger
         setPendingCount(0);
         setAdminRecentResponses(0);
-        setAdminRecentIzChanges(0);
+        setAdminPendingIzSlots(0);
+        setTeacherRecentIzDecisions(0);
 
         if (!isTeacher && !isAdmin) return;
         let cancelled = false;
@@ -32,6 +35,9 @@ const Layout = () => {
                         inv => inv.teacherId === tid && inv.status === 'pending'
                     ).length;
                     setPendingCount(count);
+
+                    const izDec = await countRecentIzDecisions(tid, 24);
+                    if (!cancelled) setTeacherRecentIzDecisions(izDec);
                 }
                 if (isAdmin) {
                     const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -42,9 +48,8 @@ const Layout = () => {
                     ).length;
                     setAdminRecentResponses(count);
 
-                    // Recent IZ slot changes (count of distinct teachers)
-                    const izCount = await countRecentIzChanges(24);
-                    if (!cancelled) setAdminRecentIzChanges(izCount);
+                    const pendingIz = await countPendingIzSlots();
+                    if (!cancelled) setAdminPendingIzSlots(pendingIz);
                 }
             } catch { /* ignore */ }
         };
@@ -164,16 +169,19 @@ const Layout = () => {
                         justifyContent: 'center'
                     }}>
                         {links.map(({ to, label, icon: Icon }) => {
-                            // Teacher: pending count on "Моё расписание"
+                            // Teacher: pending invitations on "Моё расписание"
+                            // Teacher: recent admin decisions on "Инд. занятия"
                             // Admin: recent invitation responses on "Приглашения"
-                            // Admin: recent IZ slot changes on "Инд. занятия"
+                            // Admin: pending IZ slots requiring review on "Инд. занятия"
                             let badge = null;
                             if (isAdmin && to === '/invitations' && adminRecentResponses > 0) {
                                 badge = adminRecentResponses;
-                            } else if (isAdmin && to === '/individual-slots' && adminRecentIzChanges > 0) {
-                                badge = adminRecentIzChanges;
+                            } else if (isAdmin && to === '/individual-slots' && adminPendingIzSlots > 0) {
+                                badge = adminPendingIzSlots;
                             } else if (isTeacher && to === '/teacher-schedule' && pendingCount > 0) {
                                 badge = pendingCount;
+                            } else if (isTeacher && to === '/individual-slots' && teacherRecentIzDecisions > 0) {
+                                badge = teacherRecentIzDecisions;
                             }
                             return (
                                 <Link key={to} to={to} style={linkStyle(to)}>

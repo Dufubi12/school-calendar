@@ -320,6 +320,56 @@ export async function respondToInvitation(id, status) {
         .update({ status, responded_at: new Date().toISOString() })
         .eq('id', id);
     if (error) throw error;
+
+    // On accept — auto-block the slot in individual_slots (single_date busy)
+    // for each occurrence of the invitation, so it shows up as grey-zone
+    // everywhere (calendar, my-slots, IZ page).
+    if (status !== 'accepted') return;
+    try {
+        const { data: inv } = await supabase
+            .from('invitations')
+            .select('teacher_id, invite_date, time_slot, recurrence_pattern, recurrence_end_date')
+            .eq('id', id)
+            .maybeSingle();
+        if (!inv) return;
+
+        const occurrences = [];
+        const pattern = inv.recurrence_pattern || 'once';
+        if (pattern === 'once' || !inv.recurrence_end_date) {
+            occurrences.push(inv.invite_date);
+        } else {
+            const stepDays = pattern === 'biweekly' ? 14 : 7;
+            const start = new Date(inv.invite_date + 'T00:00:00');
+            const end = new Date(inv.recurrence_end_date + 'T00:00:00');
+            const cur = new Date(start);
+            let i = 0;
+            while (cur <= end && i < 520) {
+                const y = cur.getFullYear();
+                const m = String(cur.getMonth() + 1).padStart(2, '0');
+                const d = String(cur.getDate()).padStart(2, '0');
+                occurrences.push(`${y}-${m}-${d}`);
+                cur.setDate(cur.getDate() + stepDays);
+                i++;
+            }
+        }
+
+        // Best-effort: ignore individual failures so a partial accept
+        // still completes (the invitation itself is already accepted).
+        await Promise.all(
+            occurrences.map(date =>
+                createSingleIndividualSlot({
+                    teacherId: inv.teacher_id,
+                    date,
+                    timeSlot: inv.time_slot,
+                    status: 'busy',
+                }).catch(err => {
+                    console.warn('[respondToInvitation] auto-block slot failed for', date, err?.message);
+                })
+            )
+        );
+    } catch (err) {
+        console.warn('[respondToInvitation] auto-block setup failed:', err?.message);
+    }
 }
 
 export async function deleteInvitation(id) {

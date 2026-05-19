@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useSchedule } from '../context/ScheduleContext';
-import { REAL_SCHEDULE } from '../data/mockData';
 import { loadHomeworkChecks, loadHomeworkRates, loadLessonTypes, loadTeacherRates, saveTeacherRate, rateForLessonType } from '../lib/api';
 import RoleFilterTabs, { filterByRole } from '../components/RoleFilterTabs';
 import { computeForRange } from '../lib/extraPay';
@@ -33,7 +32,7 @@ const getLessonTypeForSlot = (slot, lessonTypes) => {
 };
 
 const StatisticsPage = () => {
-    const { teachers, getSlotsForDate } = useSchedule();
+    const { teachers, getSlotsForDate, realSchedule } = useSchedule();
     const [roleFilter, setRoleFilter] = useState('all');
 
     // Date range for statistics
@@ -90,7 +89,7 @@ const StatisticsPage = () => {
         teachers.forEach(t => {
             const lastName = t.name.split(' ')[0];
             const counts = {};
-            Object.entries(REAL_SCHEDULE).forEach(([className, days]) => {
+            Object.entries(realSchedule).forEach(([className, days]) => {
                 Object.entries(days).forEach(([dayName, lessons]) => {
                     if (!WEEKDAYS_LIST.includes(dayName)) return;
                     lessons.forEach(lesson => {
@@ -104,7 +103,7 @@ const StatisticsPage = () => {
             result[t.id] = counts;
         });
         return result;
-    }, [teachers, lessonTypes]);
+    }, [teachers, lessonTypes, realSchedule]);
 
     // Есть ли вообще размеченные типы (отличные от Групповой)
     const hasCustomTypes = useMemo(() => {

@@ -9,12 +9,9 @@ import {
     deleteInvitation as apiDeleteInvitation
 } from '../lib/api';
 import RoleFilterTabs, { filterByRole, isTutor } from '../components/RoleFilterTabs';
-import { REAL_SCHEDULE } from '../data/mockData';
-
-// Expose REAL_SCHEDULE for conflict-check (used inside modal useMemo)
-if (typeof window !== 'undefined') {
-    window.__REAL_SCHEDULE__ = REAL_SCHEDULE;
-}
+// realSchedule is read from ScheduleContext and re-exposed via window
+// for the conflict-check useMemo inside the modal (the modal already
+// uses window.__REAL_SCHEDULE__ to avoid prop drilling).
 
 const STATUS_LABELS = {
     pending: 'Ожидает',
@@ -885,7 +882,16 @@ const CreateInvitationModal = ({ teachers, bellSchedule, existingInvitations, on
 };
 
 const InvitationsPage = () => {
-    const { teachers, bellSchedule } = useSchedule();
+    const { teachers, bellSchedule, realSchedule } = useSchedule();
+
+    // Expose realSchedule for the conflict-check useMemo inside the modal.
+    // The modal reads window.__REAL_SCHEDULE__ to avoid prop drilling — keep
+    // it in sync with the context state.
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            window.__REAL_SCHEDULE__ = realSchedule;
+        }
+    }, [realSchedule]);
     const { currentUser, isAdmin, isTeacher } = useAuth();
     const [invitations, setInvitations] = useState([]);
     const [loading, setLoading] = useState(true);

@@ -3,7 +3,6 @@ import { useAuth } from '../context/AuthContext';
 import { useSchedule } from '../context/ScheduleContext';
 import { GraduationCap, Check, X, Info, Plus, Trash2, Clock } from 'lucide-react';
 import { loadIndividualSlots, saveIndividualSlot, createSingleIndividualSlot, createRecurringIndividualSlot, deleteIndividualSlot, loadAvailability, loadInvitations, setIzSlotApproval, loadTeacherTimeGrid, addTeacherTimeSlot, deleteTeacherTimeSlot, seedTeacherTimeGridFromDefault, DEFAULT_HOUR_GRID } from '../lib/api';
-import { REAL_SCHEDULE } from '../data/mockData';
 
 const DAY_FULL_RU = {
     'пн': 'Понедельник', 'вт': 'Вторник', 'ср': 'Среда',
@@ -18,7 +17,7 @@ const DAY_FULL = ['Понедельник', 'Вторник', 'Среда', 'Ч�
 const NEXT_STATE = { 'default': 'free', 'free': 'busy', 'busy': 'default' };
 
 const IndividualSlotsPage = () => {
-    const { teachers } = useSchedule();
+    const { teachers, realSchedule } = useSchedule();
     const { isAdmin, isTeacher, currentUser } = useAuth();
 
     // Load slots from Supabase on mount
@@ -161,9 +160,9 @@ const IndividualSlotsPage = () => {
         if (!teacherId) return null;
         const dayFull = DAY_FULL_RU[day];
 
-        // 1) School schedule (REAL_SCHEDULE) — same day-of-week + same time
+        // 1) School schedule (from realSchedule context) — same day-of-week + same time
         try {
-            for (const [className, days] of Object.entries(REAL_SCHEDULE)) {
+            for (const [className, days] of Object.entries(realSchedule)) {
                 const lessons = days[dayFull] || [];
                 for (const l of lessons) {
                     if (l.teacher === selectedTeacherKey && l.time === timeKey) {
@@ -179,7 +178,7 @@ const IndividualSlotsPage = () => {
 
         // 3) Accepted invitation — would need to check by date, skip for now (recurring grid doesn't have date)
         return null;
-    }, [selected, selectedTeacherKey, teachers, availability]);
+    }, [selected, selectedTeacherKey, teachers, availability, realSchedule]);
 
     const cycleCell = useCallback(async (day, timeKey) => {
         if (readOnly || !selectedTeacherKey) return;

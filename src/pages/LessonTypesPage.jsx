@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { REAL_SCHEDULE } from '../data/mockData';
+import { useSchedule } from '../context/ScheduleContext';
 import { loadLessonTypes, saveLessonType } from '../lib/api';
 import { Tag } from 'lucide-react';
 
@@ -23,6 +23,7 @@ const buildLessonKey = (className, dayName, time, teacher) =>
 
 const LessonTypesPage = () => {
     const { isAdmin } = useAuth();
+    const { realSchedule } = useSchedule();
     const [lessonTypes, setLessonTypes] = useState({});
     const [loading, setLoading] = useState(true);
     const [filterClass, setFilterClass] = useState('all');
@@ -48,10 +49,10 @@ const LessonTypesPage = () => {
         };
     }, []);
 
-    // Собираем все уроки из расписания
+    // Собираем все уроки из расписания (Supabase + fallback)
     const allLessons = useMemo(() => {
         const rows = [];
-        Object.entries(REAL_SCHEDULE).forEach(([className, days]) => {
+        Object.entries(realSchedule).forEach(([className, days]) => {
             Object.entries(days).forEach(([dayName, lessons]) => {
                 if (!WEEKDAYS.includes(dayName)) return;
                 lessons.forEach((lesson) => {
@@ -67,7 +68,7 @@ const LessonTypesPage = () => {
             });
         });
         return rows;
-    }, []);
+    }, [realSchedule]);
 
     // Списки для фильтров
     const classOptions = useMemo(() => {

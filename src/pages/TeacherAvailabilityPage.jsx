@@ -3,7 +3,6 @@ import { useSchedule } from '../context/ScheduleContext';
 import { useAuth } from '../context/AuthContext';
 import { CalendarClock, Check, X } from 'lucide-react';
 import { loadAvailability, saveAvailability, loadIndividualSlots } from '../lib/api';
-import { REAL_SCHEDULE } from '../data/mockData';
 
 const WEEKDAYS = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
 const WEEKDAY_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -16,7 +15,7 @@ const NEXT_STATE = {
 };
 
 const TeacherAvailabilityPage = () => {
-    const { teachers, bellSchedule } = useSchedule();
+    const { teachers, bellSchedule, realSchedule } = useSchedule();
     const { isAdmin, isTeacher, currentUser } = useAuth();
 
     // Availability state — shape: { [teacherId]: { [dayName]: { [timeSlot]: 'free'|'busy' } } }
@@ -106,7 +105,7 @@ const TeacherAvailabilityPage = () => {
         const lastName = teacherName.split(' ')[0];
         // 1) School schedule
         try {
-            for (const [className, days] of Object.entries(REAL_SCHEDULE)) {
+            for (const [className, days] of Object.entries(realSchedule)) {
                 const lessons = days[day] || [];
                 for (const l of lessons) {
                     if (l.teacher === lastName && l.time === timeKey) {
@@ -125,7 +124,7 @@ const TeacherAvailabilityPage = () => {
         const izStatus = izSlots[lastName]?.slots?.[dayCode]?.[timeKey];
         if (izStatus === 'busy') return 'Занят в инд. занятиях';
         return null;
-    }, [izSlots]);
+    }, [izSlots, realSchedule]);
 
     const cycleCell = useCallback(async (day, timeKey) => {
         if (readOnly || !selectedTeacherId) return;

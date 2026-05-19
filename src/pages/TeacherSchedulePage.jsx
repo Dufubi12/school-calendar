@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSchedule } from '../context/ScheduleContext';
 import { useAuth } from '../context/AuthContext';
-import { REAL_SCHEDULE } from '../data/mockData';
 import { loadHomeworkChecks, loadHomeworkRates, loadLessonTypes, loadTeacherRates } from '../lib/api';
 import { loadInvitations, respondToInvitation } from '../lib/api';
 import { UserCheck, Mail, Check, X, Clock } from 'lucide-react';
@@ -54,7 +53,7 @@ const getWorkingDates = (start, end) => {
 };
 
 const TeacherSchedulePage = () => {
-    const { teachers, bellSchedule } = useSchedule();
+    const { teachers, bellSchedule, realSchedule } = useSchedule();
     const { isAdmin, isTeacher, currentUser } = useAuth();
     const [selectedTeacherId, setSelectedTeacherId] = useState(
         isTeacher && currentUser?.teacherId ? String(currentUser.teacherId) : ''
@@ -139,7 +138,7 @@ const TeacherSchedulePage = () => {
         return r;
     }, [selectedTeacher, teacherRatesMap]);
 
-    // Строим недельное расписание учителя из REAL_SCHEDULE
+    // Строим недельное расписание учителя из realSchedule (Supabase + fallback)
     // Структура: { "09:00-09:45": { "Понедельник": [{subject, grade}], ... }, ... }
     const weeklySchedule = useMemo(() => {
         if (!selectedTeacher) return {};
@@ -147,7 +146,7 @@ const TeacherSchedulePage = () => {
         const lastName = selectedTeacher.name.split(' ')[0];
         const schedule = {};
 
-        Object.entries(REAL_SCHEDULE).forEach(([className, days]) => {
+        Object.entries(realSchedule).forEach(([className, days]) => {
             Object.entries(days).forEach(([dayName, lessons]) => {
                 if (!WEEKDAYS.includes(dayName)) return;
 
@@ -169,7 +168,7 @@ const TeacherSchedulePage = () => {
         });
 
         return schedule;
-    }, [selectedTeacher]);
+    }, [selectedTeacher, realSchedule]);
 
     // Уникальные классы из расписания учителя
     const availableClasses = useMemo(() => {

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { nextMonth, prevMonth } from '../utils/dateUtils';
+import { nextMonth, prevMonth, nextWeek, prevWeek } from '../utils/dateUtils';
 import CalendarHeader from '../components/Calendar/CalendarHeader';
 import CalendarGrid from '../components/Calendar/CalendarGrid';
 import SubstitutionModal from '../components/Substitution/SubstitutionModal';
@@ -23,6 +23,7 @@ const CalendarPage = () => {
     const [selectedTeacher, setSelectedTeacher] = useState('all'); // 'all' or teacher last name
     const [roleFilter, setRoleFilter] = useState('all'); // 'all' | 'teachers' | 'tutors'
     const [kindFilter, setKindFilter] = useState('all'); // 'all' | 'group' | 'individual'
+    const [viewKind, setViewKind] = useState('week'); // 'month' | 'week' — default week per spec
 
     // Available classes
     const availableClasses = ['all', '1А', '1Б', '2А', '2Б', '2В', '3А', '3Б', '3В', '4А', '4Б', '4В', '5А', '5Б', '5В', '6А', '6Б', '7А', '7Б', '8А', '9А'];
@@ -193,12 +194,16 @@ const CalendarPage = () => {
         return filterByRole(teachers, roleFilter).map(t => t.name.split(' ')[0]);
     }, [teachers, roleFilter]);
 
-    const handleNextMonth = () => {
-        setCurrentDate(nextMonth(currentDate));
+    const handleNext = () => {
+        setCurrentDate(viewKind === 'week' ? nextWeek(currentDate) : nextMonth(currentDate));
     };
 
-    const handlePrevMonth = () => {
-        setCurrentDate(prevMonth(currentDate));
+    const handlePrev = () => {
+        setCurrentDate(viewKind === 'week' ? prevWeek(currentDate) : prevMonth(currentDate));
+    };
+
+    const handleToday = () => {
+        setCurrentDate(new Date());
     };
 
     const handleDayClick = (day) => {
@@ -232,8 +237,11 @@ const CalendarPage = () => {
         <div className="calendar-page">
             <CalendarHeader
                 currentDate={currentDate}
-                onNextMonth={handleNextMonth}
-                onPrevMonth={handlePrevMonth}
+                onNext={handleNext}
+                onPrev={handlePrev}
+                onToday={handleToday}
+                viewKind={viewKind}
+                onViewKindChange={setViewKind}
             />
 
             {/* View Mode Toggle */}
@@ -427,6 +435,7 @@ const CalendarPage = () => {
             {viewMode === 'calendar' ? (
                 <CalendarGrid
                     currentDate={currentDate}
+                    viewKind={viewKind}
                     onDayClick={handleDayClick}
                     substitutions={eventsWithInvitations}
                     selectedClass={selectedClass}

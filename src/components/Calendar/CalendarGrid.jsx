@@ -1,11 +1,15 @@
 import React, { useMemo } from 'react';
 import { isSameMonth, isToday, format } from 'date-fns';
-import { getCalendarDays, formatWeekDay } from '../../utils/dateUtils';
+import { getCalendarDays, getWeekDays, formatWeekDay } from '../../utils/dateUtils';
 import { useSchedule } from '../../context/ScheduleContext';
 
-const CalendarGrid = ({ currentDate, onDayClick, substitutions = [], selectedClass = 'all', selectedTeacher = 'all', allowedTeacherLastNames = null }) => {
+const CalendarGrid = ({ currentDate, viewKind = 'month', onDayClick, substitutions = [], selectedClass = 'all', selectedTeacher = 'all', allowedTeacherLastNames = null }) => {
     const { teachers } = useSchedule();
-    const days = useMemo(() => getCalendarDays(currentDate), [currentDate]);
+    const days = useMemo(
+        () => viewKind === 'week' ? getWeekDays(currentDate) : getCalendarDays(currentDate),
+        [currentDate, viewKind]
+    );
+    const isWeekView = viewKind === 'week';
 
     const resolveFullName = (partialName) => {
         if (!partialName || partialName === 'Не назначен' || partialName.includes(' ')) return partialName;
@@ -52,7 +56,7 @@ const CalendarGrid = ({ currentDate, onDayClick, substitutions = [], selectedCla
 
             {/* Days */}
             {days.map((day) => {
-                const isCurrentMonth = isSameMonth(day, currentDate);
+                const isCurrentMonth = isWeekView ? true : isSameMonth(day, currentDate);
                 const isDayToday = isToday(day);
                 const weekend = isWeekend(day);
                 const dateKey = format(day, 'yyyy-MM-dd');
@@ -82,7 +86,7 @@ const CalendarGrid = ({ currentDate, onDayClick, substitutions = [], selectedCla
                         key={day.toString()}
                         onClick={() => onDayClick && onDayClick(day)}
                         style={{
-                            minHeight: '130px',
+                            minHeight: isWeekView ? '280px' : '130px',
                             padding: '8px',
                             opacity: isCurrentMonth ? 1 : 0.45,
                             position: 'relative',
@@ -136,7 +140,7 @@ const CalendarGrid = ({ currentDate, onDayClick, substitutions = [], selectedCla
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', overflow: 'hidden', flex: 1 }}>
                             {(selectedClass !== 'all' || selectedTeacher !== 'all') ? (
                                 <>
-                                    {dayEvents.slice(0, 5).map(event => {
+                                    {dayEvents.slice(0, isWeekView ? 12 : 5).map(event => {
                                         const isSubstitution = event.type === 'substitution';
                                         const isClub = event.type === 'club';
                                         const isPending = event.type === 'pending-invitation';
@@ -193,7 +197,7 @@ const CalendarGrid = ({ currentDate, onDayClick, substitutions = [], selectedCla
                                             </div>
                                         );
                                     })}
-                                    {dayEvents.length > 5 && (
+                                    {dayEvents.length > (isWeekView ? 12 : 5) && (
                                         <div style={{
                                             fontSize: '0.65rem',
                                             color: 'var(--color-text-muted)',
@@ -203,7 +207,7 @@ const CalendarGrid = ({ currentDate, onDayClick, substitutions = [], selectedCla
                                             borderRadius: 'var(--radius-sm)',
                                             fontWeight: 600
                                         }}>
-                                            +{dayEvents.length - 5} ещё
+                                            +{dayEvents.length - (isWeekView ? 12 : 5)} ещё
                                         </div>
                                     )}
                                 </>

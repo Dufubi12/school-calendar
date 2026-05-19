@@ -76,6 +76,7 @@ const TeacherSchedulePage = () => {
         return lastDay.toISOString().split('T')[0];
     });
     const [selectedTimeSlots, setSelectedTimeSlots] = useState('all');
+    const [selectedClass, setSelectedClass] = useState('all');
 
     // Async-loaded data from Supabase
     const [homeworkChecks, setHomeworkChecks] = useState({});
@@ -169,7 +170,27 @@ const TeacherSchedulePage = () => {
         return schedule;
     }, [selectedTeacher]);
 
-    // Сортируем временные слоты по порядку из расписания звонков
+    // Уникальные классы из расписания учителя
+    const availableClasses = useMemo(() => {
+        const set = new Set();
+        Object.values(weeklySchedule).forEach(days => {
+            Object.values(days).forEach(lessons => {
+                lessons.forEach(l => { if (l.grade) set.add(l.grade); });
+            });
+        });
+        return [...set].sort((a, b) => a.localeCompare(b, 'ru'));
+    }, [weeklySchedule]);
+
+    // Если выбранный класс пропал (сменился учитель) — сбросить
+    useEffect(() => {
+        if (selectedClass !== 'all' && !availableClasses.includes(selectedClass)) {
+            setSelectedClass('all');
+        }
+    }, [availableClasses, selectedClass]);
+
+    // Сортируем временные слоты по порядку из расписания звонков.
+    // Используем нефильтрованное расписание — чтобы в dropdown «Урок» был полный список,
+    // независимо от выбранного класса.
     const allTimeSlots = useMemo(() => {
         const bellTimes = bellSchedule.map(b => `${b.startTime}-${b.endTime}`);
         const scheduleTimes = Object.keys(weeklySchedule);
@@ -190,22 +211,38 @@ const TeacherSchedulePage = () => {
         return bell ? bell.label : '';
     };
 
+    // Расписание с применённым фильтром по классу
+    const filteredWeeklySchedule = useMemo(() => {
+        if (selectedClass === 'all') return weeklySchedule;
+        const out = {};
+        Object.entries(weeklySchedule).forEach(([time, days]) => {
+            Object.entries(days).forEach(([dayName, lessons]) => {
+                const matching = lessons.filter(l => l.grade === selectedClass);
+                if (matching.length > 0) {
+                    if (!out[time]) out[time] = {};
+                    out[time][dayName] = matching;
+                }
+            });
+        });
+        return out;
+    }, [weeklySchedule, selectedClass]);
+
     // Считаем общее количество уроков в неделю
     const totalLessonsPerWeek = useMemo(() => {
         let count = 0;
-        Object.values(weeklySchedule).forEach(days => {
+        Object.values(filteredWeeklySchedule).forEach(days => {
             Object.values(days).forEach(lessons => {
                 count += lessons.length;
             });
         });
         return count;
-    }, [weeklySchedule]);
+    }, [filteredWeeklySchedule]);
 
     // Считаем уроки и оплату за выбранный период
     const periodStats = useMemo(() => {
         const counts = getWeekdayCounts(startDate, endDate);
         let totalLessons = 0;
-        Object.values(weeklySchedule).forEach(days => {
+        Object.values(filteredWeeklySchedule).forEach(days => {
             Object.entries(days).forEach(([dayName, lessons]) => {
                 totalLessons += lessons.length * (counts[dayName] || 0);
             });
@@ -223,7 +260,7 @@ const TeacherSchedulePage = () => {
         }
         const hwPayment = hwCount * hwRate;
         return { totalLessons, lessonsPayment: totalLessons * teacherRate, hwCount, hwRate, hwPayment, totalPayment: totalLessons * teacherRate + hwPayment };
-    }, [weeklySchedule, teacherRate, startDate, endDate, selectedTeacher, homeworkChecks, homeworkRates]);
+    }, [filteredWeeklySchedule, teacherRate, startDate, endDate, selectedTeacher, homeworkChecks, homeworkRates]);
 
     // Генерируем детальную выписку по датам
     const detailedReport = useMemo(() => {
@@ -241,7 +278,7 @@ const TeacherSchedulePage = () => {
             // Собираем все уроки в этот день (по всем временным слотам)
             const filteredSlots = selectedTimeSlots === 'all' ? allTimeSlots : allTimeSlots.filter(t => t === selectedTimeSlots);
             filteredSlots.forEach(time => {
-                const lessons = weeklySchedule[time]?.[dayName] || [];
+                const lessons = filteredWeeklySchedule[time]?.[dayName] || [];
                 lessons.forEach(l => {
                     const typeKey = `${l.grade}_${dayName}_${time}_${lastName}`;
                     const lessonType = lessonTypes[typeKey] || DEFAULT_LESSON_TYPE;
@@ -274,7 +311,7 @@ const TeacherSchedulePage = () => {
         });
 
         return rows;
-    }, [selectedTeacher, weeklySchedule, teacherRate, startDate, endDate, allTimeSlots, selectedTimeSlots, homeworkChecks, homeworkRates, lessonTypes]);
+    }, [selectedTeacher, filteredWeeklySchedule, teacherRate, startDate, endDate, allTimeSlots, selectedTimeSlots, homeworkChecks, homeworkRates, lessonTypes]);
 
     return (
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
@@ -434,6 +471,25 @@ const TeacherSchedulePage = () => {
                 {selectedTeacher && (
                     <>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+                            <label htmlFor="class-filter" style={{ fontWeight: 500 }}>🏫 Класс:</label>
+                            <select
+                                id="class-filter"
+                                value={selectedClass}
+                                onChange={(e) => setSelectedClass(e.target.value)}
+                                style={{
+                                    padding: '6px 8px', borderRadius: '6px',
+                                    border: '1px solid #e5e7eb', fontSize: '0.85rem',
+                                    cursor: 'pointer', minWidth: '110px'
+                                }}
+                            >
+                                <option value="all">Все классы</option>
+                                {availableClasses.map(cls => (
+                                    <option key={cls} value={cls}>{cls}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
                             <label htmlFor="time-filter" style={{ fontWeight: 500 }}>⏰ Урок:</label>
                             <select
                                 id="time-filter"
@@ -525,7 +581,7 @@ const TeacherSchedulePage = () => {
                                         </div>
                                     </td>
                                     {WEEKDAYS.map(day => {
-                                        const lessons = weeklySchedule[time]?.[day] || [];
+                                        const lessons = filteredWeeklySchedule[time]?.[day] || [];
                                         const payment = lessons.length * teacherRate;
                                         return (
                                             <td key={day} style={{

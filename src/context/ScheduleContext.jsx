@@ -8,6 +8,16 @@ import {
     migrateOldEvents
 } from '../utils/scheduleUtils';
 
+// Локальное форматирование даты в YYYY-MM-DD без сдвига по таймзоне.
+// toISOString() возвращает UTC и для МСК(UTC+3) даёт дату на день назад,
+// из-за чего события понедельника появлялись на воскресенье.
+const formatLocalDate = (date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+};
+
 // Функция для поиска учителя по имени
 const findTeacherByName = (teacherName) => {
     if (!teacherName || teacherName === 'Не назначен') return null;
@@ -60,7 +70,7 @@ const convertRealScheduleToTimeSlots = () => {
 
             // Создаем слоты для каждого вхождения этого дня недели
             while (currentDate <= endDate) {
-                const dateStr = currentDate.toISOString().split('T')[0];
+                const dateStr = formatLocalDate(currentDate);
 
                 // Для каждого урока в этот день
                 lessons.forEach((lesson, lessonIndex) => {
@@ -127,7 +137,7 @@ const convertRealScheduleToEvents = () => {
 
             // Создаем события для каждого вхождения этого дня недели
             while (currentDate <= endDate) {
-                const dateStr = currentDate.toISOString().split('T')[0]; // YYYY-MM-DD
+                const dateStr = formatLocalDate(currentDate); // YYYY-MM-DD
 
                 // Для каждого урока в этот день
                 lessons.forEach(lesson => {
@@ -237,7 +247,7 @@ export const ScheduleProvider = ({ children }) => {
                 }
 
                 while (currentDate <= endDate) {
-                    const dateStr = currentDate.toISOString().split('T')[0];
+                    const dateStr = formatLocalDate(currentDate);
 
                     lessons.forEach(lesson => {
                         events.push({
@@ -347,7 +357,7 @@ export const ScheduleProvider = ({ children }) => {
     // Генерация слотов для конкретной даты
     const generateSlotsForDate = (date) => {
         const slots = [];
-        const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0];
+        const dateStr = typeof date === 'string' ? date : formatLocalDate(date);
         const dateObj = new Date(dateStr);
         const dayNumber = dateObj.getDay();
 

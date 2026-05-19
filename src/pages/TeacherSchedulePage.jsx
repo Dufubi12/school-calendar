@@ -288,7 +288,10 @@ const TeacherSchedulePage = () => {
         const rows = [];
 
         workingDates.forEach(({ date, dayName }) => {
-            const dateStr = date.toISOString().split('T')[0];
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            const dateStr = `${y}-${m}-${d}`;
             const dayLessons = [];
             // Собираем все уроки в этот день (по всем временным слотам)
             const filteredSlots = selectedTimeSlots === 'all' ? allTimeSlots : allTimeSlots.filter(t => t === selectedTimeSlots);

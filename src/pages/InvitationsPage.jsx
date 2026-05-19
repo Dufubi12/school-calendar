@@ -46,6 +46,8 @@ const mapDbRow = (row) => ({
     note: row.note,
     studentName: row.student_name || null,
     lessonKind: row.lesson_kind || null,
+    recurrencePattern: row.recurrence_pattern || 'once',
+    recurrenceEndDate: row.recurrence_end_date || null,
     status: row.status,
     createdAt: row.created_at,
     respondedAt: row.responded_at,
@@ -186,6 +188,19 @@ const InvitationCard = ({ invitation, isAdminView, onDelete, onAccept, onDecline
                 {invitation.studentName && (
                     <span style={{ color: '#6b7280' }}>· 👤 {invitation.studentName}</span>
                 )}
+                {invitation.recurrencePattern && invitation.recurrencePattern !== 'once' && (
+                    <span style={{
+                        padding: '2px 8px',
+                        borderRadius: '6px',
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        backgroundColor: '#fef3c7',
+                        color: '#92400e'
+                    }}>
+                        🔁 {invitation.recurrencePattern === 'biweekly' ? 'каждые 2 нед' : 'еженедельно'}
+                        {invitation.recurrenceEndDate && ` до ${new Date(invitation.recurrenceEndDate + 'T00:00:00').toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}`}
+                    </span>
+                )}
             </div>
 
             {invitation.note && (
@@ -292,6 +307,8 @@ const CreateInvitationModal = ({ teachers, bellSchedule, existingInvitations, on
     const [note, setNote] = useState('');
     const [studentName, setStudentName] = useState('');
     const [lessonKind, setLessonKind] = useState('Групповой');
+    const [recurrencePattern, setRecurrencePattern] = useState('once');
+    const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [availability, setAvailability] = useState({});
@@ -359,15 +376,32 @@ const CreateInvitationModal = ({ teachers, bellSchedule, existingInvitations, on
             issues.push(`Педагог отметил себя занятым в этот слот («Мои слоты»: ${dow}, ${time})`);
         }
 
-        // 3) Existing invitation for same teacher/date/time
-        const taken = (existingInvitations || []).find(inv =>
-            inv.teacherId === tIdNum &&
-            inv.date === date &&
-            inv.time === time &&
-            inv.status !== 'declined'
-        );
+        // 3) Existing invitation for same teacher/date/time — including expanded recurring
+        const taken = (existingInvitations || []).find(inv => {
+            if (inv.teacherId !== tIdNum) return false;
+            if (inv.time !== time) return false;
+            if (inv.status === 'declined') return false;
+
+            const pattern = inv.recurrencePattern || 'once';
+            if (pattern === 'once' || !inv.recurrenceEndDate) {
+                return inv.date === date;
+            }
+
+            // Recurring — check whether `date` falls on a multiple of (7 or 14) days
+            // from inv.date and lies in [inv.date, inv.recurrenceEndDate]
+            const start = new Date(inv.date + 'T00:00:00');
+            const end = new Date(inv.recurrenceEndDate + 'T00:00:00');
+            const target = new Date(date + 'T00:00:00');
+            if (target < start || target > end) return false;
+            const stepDays = pattern === 'biweekly' ? 14 : 7;
+            const diffDays = Math.round((target - start) / 86400000);
+            return diffDays >= 0 && diffDays % stepDays === 0;
+        });
         if (taken) {
-            issues.push(`Уже есть приглашение на этот слот (статус: ${taken.status === 'accepted' ? 'принято' : 'ожидает'})`);
+            const pat = (taken.recurrencePattern && taken.recurrencePattern !== 'once')
+                ? ` (${taken.recurrencePattern === 'biweekly' ? 'раз в 2 недели' : 'каждую неделю'})`
+                : '';
+            issues.push(`Уже есть приглашение на этот слот${pat} (статус: ${taken.status === 'accepted' ? 'принято' : 'ожидает'})`);
         }
 
         // 4) ИЗ-слоты педагога (recurring weekly + single-date)
@@ -428,6 +462,18 @@ const CreateInvitationModal = ({ teachers, bellSchedule, existingInvitations, on
             return;
         }
 
+        // Validate recurrence end date
+        if (recurrencePattern !== 'once') {
+            if (!recurrenceEndDate) {
+                setError('Укажите дату окончания повторений');
+                return;
+            }
+            if (recurrenceEndDate < date) {
+                setError('Дата окончания должна быть позже начала');
+                return;
+            }
+        }
+
         setError('');
         setSubmitting(true);
         try {
@@ -441,6 +487,8 @@ const CreateInvitationModal = ({ teachers, bellSchedule, existingInvitations, on
                 note: note.trim(),
                 studentName: isIndividual ? studentName.trim() : null,
                 lessonKind: lessonKind === 'Групповой' ? null : lessonKind,
+                recurrencePattern,
+                recurrenceEndDate: recurrencePattern === 'once' ? null : recurrenceEndDate,
             });
         } catch (err) {
             console.error('Failed to create invitation:', err);
@@ -672,6 +720,56 @@ const CreateInvitationModal = ({ teachers, bellSchedule, existingInvitations, on
                             />
                         </div>
                     )}
+
+                    {/* Recurrence */}
+                    <div>
+                        <label style={{ fontSize: '0.85rem', fontWeight: 500, marginBottom: '4px', display: 'block' }}>
+                            Повторяемость
+                        </label>
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            {[
+                                { id: 'once', label: 'Разово' },
+                                { id: 'weekly', label: 'Каждую неделю' },
+                                { id: 'biweekly', label: 'Раз в 2 недели' },
+                            ].map(opt => {
+                                const active = recurrencePattern === opt.id;
+                                return (
+                                    <button
+                                        key={opt.id}
+                                        type="button"
+                                        onClick={() => setRecurrencePattern(opt.id)}
+                                        style={{
+                                            padding: '6px 12px',
+                                            borderRadius: 'var(--radius)',
+                                            border: '2px solid',
+                                            borderColor: active ? 'var(--color-primary)' : 'transparent',
+                                            backgroundColor: active ? 'var(--color-moss-tint)' : 'var(--color-bg-tint)',
+                                            color: active ? 'var(--color-primary-deep)' : 'var(--color-text-muted)',
+                                            fontSize: '0.8rem',
+                                            fontWeight: 600,
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        {opt.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        {recurrencePattern !== 'once' && (
+                            <div style={{ marginTop: '8px' }}>
+                                <label style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', display: 'block', marginBottom: '4px' }}>
+                                    Дата окончания повторений *
+                                </label>
+                                <input
+                                    type="date"
+                                    value={recurrenceEndDate}
+                                    min={date}
+                                    onChange={(e) => setRecurrenceEndDate(e.target.value)}
+                                    style={{ width: '200px' }}
+                                />
+                            </div>
+                        )}
+                    </div>
 
                     <div>
                         <label style={{ fontSize: '0.85rem', fontWeight: 500, marginBottom: '4px', display: 'block' }}>

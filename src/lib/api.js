@@ -279,6 +279,8 @@ export async function loadInvitations() {
             note: row.note,
             studentName: row.student_name || null,
             lessonKind: row.lesson_kind || null,
+            recurrencePattern: row.recurrence_pattern || 'once',
+            recurrenceEndDate: row.recurrence_end_date || null,
             status: row.status,
             createdAt: row.created_at,
             respondedAt: row.responded_at,
@@ -289,7 +291,7 @@ export async function loadInvitations() {
     }
 }
 
-export async function createInvitation({ teacherId, teacherName, date, time, subject, grade, note, studentName, lessonKind }) {
+export async function createInvitation({ teacherId, teacherName, date, time, subject, grade, note, studentName, lessonKind, recurrencePattern, recurrenceEndDate }) {
     const { data, error } = await supabase
         .from('invitations')
         .insert({
@@ -302,6 +304,8 @@ export async function createInvitation({ teacherId, teacherName, date, time, sub
             note: note || null,
             student_name: studentName || null,
             lesson_kind: lessonKind || null,
+            recurrence_pattern: recurrencePattern || 'once',
+            recurrence_end_date: recurrencePattern && recurrencePattern !== 'once' ? recurrenceEndDate : null,
             status: 'pending',
         })
         .select()

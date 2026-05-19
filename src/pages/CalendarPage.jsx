@@ -71,17 +71,16 @@ const CalendarPage = () => {
 
     // Merge invitations + ИЗ-slots into events as virtual entries
     const eventsWithInvitations = useMemo(() => {
-        // 1) invitations → virtual events
-        const invEvents = (invitations || [])
+        // 1) invitations → virtual events (with recurrence expansion)
+        const invEvents = [];
+        (invitations || [])
             .filter(inv => inv.status !== 'declined')
-            .map(inv => {
+            .forEach(inv => {
                 const teacher = teachers.find(t => t.id === inv.teacherId);
                 const lastName = teacher ? teacher.name.split(' ')[0] : '';
                 const [startTime, endTime] = (inv.time || '').split('-');
-                return {
-                    id: `inv-${inv.id}`,
+                const baseEvent = {
                     type: inv.status === 'accepted' ? 'substitution' : 'pending-invitation',
-                    date: inv.date,
                     startTime: startTime || '',
                     endTime: endTime || '',
                     time: inv.time,
@@ -94,6 +93,24 @@ const CalendarPage = () => {
                     studentName: inv.studentName || null,
                     details: `${inv.status === 'pending' ? '⏳ Предложено' : 'Замена'}: ${inv.subject}`
                 };
+
+                const pattern = inv.recurrencePattern || 'once';
+                if (pattern === 'once' || !inv.recurrenceEndDate) {
+                    invEvents.push({ ...baseEvent, id: `inv-${inv.id}`, date: inv.date });
+                    return;
+                }
+                // Expand weekly / biweekly
+                const stepDays = pattern === 'biweekly' ? 14 : 7;
+                const start = new Date(inv.date + 'T00:00:00');
+                const end = new Date(inv.recurrenceEndDate + 'T00:00:00');
+                const cur = new Date(start);
+                let i = 0;
+                while (cur <= end && i < 520) { // safety: max 520 occurrences (~10y weekly)
+                    const dateStr = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+                    invEvents.push({ ...baseEvent, id: `inv-${inv.id}-${i}`, date: dateStr });
+                    cur.setDate(cur.getDate() + stepDays);
+                    i++;
+                }
             });
 
         // 2) ИЗ-busy slots → recurring weekly events for visible month ± 1

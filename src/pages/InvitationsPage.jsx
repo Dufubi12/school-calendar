@@ -295,24 +295,33 @@ const CreateInvitationModal = ({ teachers, bellSchedule, existingInvitations, on
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [availability, setAvailability] = useState({});
+    const [izSlots, setIzSlots] = useState({});
     const [forceCreate, setForceCreate] = useState(false);
 
     const isIndividual = lessonKind !== 'Групповой' && lessonKind !== 'Другое';
 
-    // Load availability once for conflict check
+    // Day-of-week code for ИЗ-slots (Russian short)
+    const DOW_CODES = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+
+    // Load availability and IZ slots once for conflict check
     useEffect(() => {
         let cancelled = false;
         (async () => {
             try {
-                const { loadAvailability } = await import('../lib/api');
-                const data = await loadAvailability();
-                if (!cancelled) setAvailability(data || {});
+                const { loadAvailability, loadIndividualSlots } = await import('../lib/api');
+                const [av, iz] = await Promise.all([
+                    loadAvailability(),
+                    loadIndividualSlots(teachers),
+                ]);
+                if (cancelled) return;
+                setAvailability(av || {});
+                setIzSlots(iz || {});
             } catch (err) {
-                console.error('Failed to load availability for conflict check', err);
+                console.error('Failed to load data for conflict check', err);
             }
         })();
         return () => { cancelled = true; };
-    }, []);
+    }, [teachers]);
 
     // Compute conflicts whenever inputs change
     const conflicts = useMemo(() => {
@@ -361,8 +370,26 @@ const CreateInvitationModal = ({ teachers, bellSchedule, existingInvitations, on
             issues.push(`Уже есть приглашение на этот слот (статус: ${taken.status === 'accepted' ? 'принято' : 'ожидает'})`);
         }
 
+        // 4) ИЗ-слоты педагога (recurring weekly + single-date)
+        const izEntry = izSlots[lastName];
+        if (izEntry) {
+            const dowCode = DOW_CODES[new Date(date + 'T00:00:00').getDay()];
+            // Recurring busy slot on this day-of-week at this time
+            const recurStatus = izEntry.slots?.[dowCode]?.[time];
+            if (recurStatus === 'busy') {
+                issues.push(`Педагог занят (ИЗ постоянный слот ${dowCode} ${time})`);
+            }
+            // One-off busy event on this exact date
+            const singleBusy = (izEntry.singleEvents || []).find(ev =>
+                ev.single_date === date && ev.time_slot === time && ev.status === 'busy'
+            );
+            if (singleBusy) {
+                issues.push(`Педагог занят (ИЗ разовое занятие ${date} ${time})`);
+            }
+        }
+
         return issues;
-    }, [teacherId, date, time, teachers, availability, existingInvitations]);
+    }, [teacherId, date, time, teachers, availability, existingInvitations, izSlots]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();

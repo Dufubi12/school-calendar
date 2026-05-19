@@ -2,7 +2,13 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSchedule } from '../context/ScheduleContext';
 import { GraduationCap, Check, X, Info, Plus, Trash2 } from 'lucide-react';
-import { loadIndividualSlots, saveIndividualSlot, createSingleIndividualSlot, createRecurringIndividualSlot, deleteIndividualSlot } from '../lib/api';
+import { loadIndividualSlots, saveIndividualSlot, createSingleIndividualSlot, createRecurringIndividualSlot, deleteIndividualSlot, loadAvailability, loadInvitations } from '../lib/api';
+import { REAL_SCHEDULE } from '../data/mockData';
+
+const DAY_FULL_RU = {
+    'пн': 'Понедельник', 'вт': 'Вторник', 'ср': 'Среда',
+    'чт': 'Четверг', 'пт': 'Пятница', 'сб': 'Суббота', 'вс': 'Воскресенье',
+};
 
 // Day codes used in the source CSV and storage
 const DAYS = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
@@ -28,22 +34,27 @@ const IndividualSlotsPage = () => {
 
     // Load slots from Supabase on mount
     const [slotsByTeacher, setSlotsByTeacher] = useState({});
+    const [availability, setAvailability] = useState({});
+    const [acceptedInvitations, setAcceptedInvitations] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showAddModal, setShowAddModal] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
-        loadIndividualSlots(teachers)
-            .then(data => {
-                if (!cancelled) {
-                    setSlotsByTeacher(data || {});
-                    setLoading(false);
-                }
-            })
-            .catch(err => {
-                console.error('Failed to load IZ slots', err);
-                if (!cancelled) setLoading(false);
-            });
+        Promise.all([
+            loadIndividualSlots(teachers),
+            loadAvailability(),
+            loadInvitations(),
+        ]).then(([slots, av, invs]) => {
+            if (cancelled) return;
+            setSlotsByTeacher(slots || {});
+            setAvailability(av || {});
+            setAcceptedInvitations((invs || []).filter(i => i.status === 'accepted'));
+            setLoading(false);
+        }).catch(err => {
+            console.error('Failed to load IZ slots', err);
+            if (!cancelled) setLoading(false);
+        });
         return () => { cancelled = true; };
     }, [teachers]);
 
@@ -106,6 +117,34 @@ const IndividualSlotsPage = () => {
         if (!selected) return 'default';
         return selected.slots?.[day]?.[timeKey] || 'default';
     }, [selected]);
+
+    // Check if this cell is occupied by something else (school lesson, availability busy, accepted invitation)
+    // Returns string reason or null
+    const getOccupiedReason = useCallback((day, timeKey) => {
+        if (!selected || !selectedTeacherKey) return null;
+        const teacherId = selected.teacherId || teachers.find(t => t.name.split(' ')[0] === selectedTeacherKey)?.id;
+        if (!teacherId) return null;
+        const dayFull = DAY_FULL_RU[day];
+
+        // 1) School schedule (REAL_SCHEDULE) — same day-of-week + same time
+        try {
+            for (const [className, days] of Object.entries(REAL_SCHEDULE)) {
+                const lessons = days[dayFull] || [];
+                for (const l of lessons) {
+                    if (l.teacher === selectedTeacherKey && l.time === timeKey) {
+                        return `Школа: ${className} ${l.subject}`;
+                    }
+                }
+            }
+        } catch { /* ignore */ }
+
+        // 2) "Мои слоты" availability — busy on the same day/time
+        const av = availability[String(teacherId)]?.[dayFull]?.[timeKey];
+        if (av === 'busy') return 'Отмечено "занят" в Моих слотах';
+
+        // 3) Accepted invitation — would need to check by date, skip for now (recurring grid doesn't have date)
+        return null;
+    }, [selected, selectedTeacherKey, teachers, availability]);
 
     const cycleCell = useCallback(async (day, timeKey) => {
         if (readOnly || !selectedTeacherKey) return;
@@ -419,10 +458,26 @@ const IndividualSlotsPage = () => {
                                                 </td>
                                                 {DAYS.map(day => {
                                                     const state = getCellState(day, slot);
-                                                    const clickable = !readOnly;
+                                                    const occupiedReason = getOccupiedReason(day, slot);
+                                                    const isOccupied = !!occupiedReason && state === 'default';
+                                                    const clickable = !readOnly && !isOccupied;
                                                     return (
                                                         <td key={day} style={{ padding: '4px 6px', borderBottom: '1px solid #e2e8f0' }}>
-                                                            {clickable ? (
+                                                            {isOccupied ? (
+                                                                <span
+                                                                    style={{
+                                                                        ...cellStyle('default', false),
+                                                                        backgroundColor: '#e2e8f0',
+                                                                        color: '#64748b',
+                                                                        cursor: 'not-allowed',
+                                                                        fontStyle: 'italic',
+                                                                        fontSize: '0.7rem'
+                                                                    }}
+                                                                    title={occupiedReason}
+                                                                >
+                                                                    ⊘ занято
+                                                                </span>
+                                                            ) : clickable ? (
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => cycleCell(day, slot)}

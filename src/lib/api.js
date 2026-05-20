@@ -665,10 +665,67 @@ export async function createSingleIndividualSlot({ teacherId, date, timeSlot, st
     return data;
 }
 
-// Create a recurring slot with arbitrary day/time (used by "+ свой слот")
-// Uses the same select → update-or-insert pattern as saveIndividualSlot
-export async function createRecurringIndividualSlot({ teacherId, day, timeSlot, status = 'busy', byAdmin = false }) {
-    return saveIndividualSlot(teacherId, day, timeSlot, status, byAdmin);
+// Create a recurring slot with arbitrary day/time (used by "+ свой слот").
+// Uses the same select → update-or-insert pattern as saveIndividualSlot.
+// If `endDate` is provided, the recurring row is created with effective_to=endDate
+// so the slot stops repeating after that date.
+export async function createRecurringIndividualSlot({ teacherId, day, timeSlot, status = 'busy', byAdmin = false, endDate = null }) {
+    // First create / update the recurring row as before
+    await saveIndividualSlot(teacherId, day, timeSlot, status, byAdmin);
+    // If endDate given, find the newly-created OPEN version and close it on that date
+    if (endDate) {
+        const { data: openRows } = await supabase
+            .from('individual_slots')
+            .select('id, effective_from')
+            .eq('teacher_id', teacherId)
+            .eq('day', day)
+            .eq('time_slot', timeSlot)
+            .is('single_date', null)
+            .is('effective_to', null);
+        const open = openRows && openRows[0];
+        if (open) {
+            await supabase
+                .from('individual_slots')
+                .update({
+                    effective_to: endDate,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq('id', open.id);
+        }
+    }
+}
+
+// Create a biweekly series of one-off slots (every 14 days) from `startDate`
+// up to and including `endDate`. Returns the list of inserted single_date rows.
+// We do this as single_date inserts (not recurring rows) because the
+// individual_slots schema treats recurring rows as weekly by (day, time_slot).
+export async function createBiweeklyIndividualSlots({ teacherId, startDate, endDate, timeSlot, status = 'busy', byAdmin = false }) {
+    if (!teacherId || !startDate || !endDate || !timeSlot) {
+        throw new Error('teacherId, startDate, endDate, timeSlot required');
+    }
+    if (endDate < startDate) throw new Error('endDate must be after startDate');
+    const occurrences = [];
+    const cur = new Date(startDate + 'T00:00:00');
+    const end = new Date(endDate + 'T00:00:00');
+    let i = 0;
+    while (cur <= end && i < 260) { // safety cap ~10 years
+        const y = cur.getFullYear();
+        const m = String(cur.getMonth() + 1).padStart(2, '0');
+        const d = String(cur.getDate()).padStart(2, '0');
+        occurrences.push(`${y}-${m}-${d}`);
+        cur.setDate(cur.getDate() + 14);
+        i++;
+    }
+    const inserted = [];
+    for (const date of occurrences) {
+        try {
+            const row = await createSingleIndividualSlot({ teacherId, date, timeSlot, status, byAdmin });
+            inserted.push(row);
+        } catch (err) {
+            console.warn('[createBiweeklyIndividualSlots] insert failed for', date, err?.message);
+        }
+    }
+    return inserted;
 }
 
 // Admin approves or rejects an IZ slot

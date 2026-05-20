@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSchedule } from '../context/ScheduleContext';
 import { GraduationCap, Check, X, Info, Plus, Trash2, Clock } from 'lucide-react';
-import { loadIndividualSlots, saveIndividualSlot, createSingleIndividualSlot, createRecurringIndividualSlot, deleteIndividualSlot, loadAvailability, loadInvitations, setIzSlotApproval, loadTeacherTimeGrid, addTeacherTimeSlot, deleteTeacherTimeSlot, seedTeacherTimeGridFromDefault, DEFAULT_HOUR_GRID } from '../lib/api';
+import { loadIndividualSlots, saveIndividualSlot, createSingleIndividualSlot, createRecurringIndividualSlot, createBiweeklyIndividualSlots, deleteIndividualSlot, loadAvailability, loadInvitations, setIzSlotApproval, loadTeacherTimeGrid, addTeacherTimeSlot, deleteTeacherTimeSlot, seedTeacherTimeGridFromDefault, DEFAULT_HOUR_GRID } from '../lib/api';
 
 const DAY_FULL_RU = {
     'пн': 'Понедельник', 'вт': 'Вторник', 'ср': 'Среда',
@@ -234,7 +234,7 @@ const IndividualSlotsPage = () => {
     }, [teachers]);
 
     // Add a custom slot (recurring weekly or single-date)
-    const handleAddSlot = useCallback(async ({ recurring, day, date, startTime, endTime }) => {
+    const handleAddSlot = useCallback(async ({ recurrence, day, date, startTime, endTime, endDate }) => {
         if (!selectedTeacherKey) return;
         const teacher = slotsByTeacher[selectedTeacherKey];
         const teacherId = teacher?.teacherId
@@ -242,9 +242,24 @@ const IndividualSlotsPage = () => {
         if (!teacherId) return;
         const timeSlot = `${startTime}-${endTime}`;
         try {
-            if (recurring) {
-                await createRecurringIndividualSlot({ teacherId, day, timeSlot, status: 'busy', byAdmin: isAdmin });
+            if (recurrence === 'weekly') {
+                await createRecurringIndividualSlot({
+                    teacherId, day, timeSlot, status: 'busy',
+                    byAdmin: isAdmin,
+                    endDate: endDate || null,
+                });
+            } else if (recurrence === 'biweekly') {
+                // Biweekly: expand into single_date rows. Need a start date —
+                // use the date the user picked (or compute next occurrence of the chosen weekday).
+                const startDate = date;
+                if (!startDate || !endDate) {
+                    throw new Error('Для повторения раз в 2 недели укажите дату начала и дату окончания');
+                }
+                await createBiweeklyIndividualSlots({
+                    teacherId, startDate, endDate, timeSlot, status: 'busy', byAdmin: isAdmin,
+                });
             } else {
+                // once
                 await createSingleIndividualSlot({ teacherId, date, timeSlot, status: 'busy', byAdmin: isAdmin });
             }
             await reloadSlots();
@@ -253,7 +268,7 @@ const IndividualSlotsPage = () => {
             console.error('Failed to add slot', err);
             alert('Не удалось добавить слот: ' + (err?.message || 'неизвестная ошибка'));
         }
-    }, [selectedTeacherKey, slotsByTeacher, teachers, reloadSlots]);
+    }, [selectedTeacherKey, slotsByTeacher, teachers, reloadSlots, isAdmin]);
 
     // Admin reviewer: approve or reject a slot (recurring or single-date)
     const handleReview = useCallback(async (slotId, decision) => {
@@ -679,35 +694,61 @@ const IndividualSlotsPage = () => {
 };
 
 // ===== Add Slot Modal =====
+// Supports three recurrence modes: 'weekly' (default, optional end date),
+// 'biweekly' (mandatory start + end), 'once' (single date).
 const AddSlotModal = ({ onClose, onSubmit }) => {
-    const [recurring, setRecurring] = useState(true);
-    const [day, setDay] = useState('пн');
-    const [date, setDate] = useState(() => {
+    const todayStr = (() => {
         const d = new Date();
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    });
+    })();
+
+    const [recurrence, setRecurrence] = useState('weekly'); // 'weekly' | 'biweekly' | 'once'
+    const [day, setDay] = useState('пн');
+    const [date, setDate] = useState(todayStr);
+    const [endDate, setEndDate] = useState('');
     const [startTime, setStartTime] = useState('16:00');
     const [endTime, setEndTime] = useState('17:00');
     const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState(null);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (submitting) return;
+        setError(null);
         if (!startTime || !endTime || startTime >= endTime) {
-            alert('Введите корректное время начала и окончания');
+            setError('Введите корректное время начала и окончания');
             return;
         }
+        if (recurrence === 'biweekly') {
+            if (!date) { setError('Укажите дату начала'); return; }
+            if (!endDate) { setError('Для повторения раз в 2 недели нужна дата окончания'); return; }
+            if (endDate < date) { setError('Дата окончания раньше даты начала'); return; }
+        }
+        if (recurrence === 'weekly' && endDate && endDate < todayStr) {
+            setError('Дата окончания не может быть в прошлом');
+            return;
+        }
+        if (recurrence === 'once' && !date) { setError('Укажите дату занятия'); return; }
+
         setSubmitting(true);
         try {
-            await onSubmit({ recurring, day, date, startTime, endTime });
+            await onSubmit({ recurrence, day, date, endDate: endDate || null, startTime, endTime });
+        } catch (err) {
+            setError(err?.message || 'Не удалось добавить слот');
         } finally {
             setSubmitting(false);
         }
     };
 
+    const segBtn = (active) => ({
+        flex: 1,
+        padding: '8px 8px',
+        fontSize: '0.78rem',
+    });
+
     return (
         <div className="modal-overlay" onClick={onClose}>
-            <div className="card modal-content" onClick={(e) => e.stopPropagation()} style={{ width: '420px', maxWidth: '95%', padding: '1.5rem' }}>
+            <div className="card modal-content" onClick={(e) => e.stopPropagation()} style={{ width: '460px', maxWidth: '95%', padding: '1.5rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                     <h3 style={{ margin: 0 }}>Добавить слот</h3>
                     <button onClick={onClose} className="btn btn-ghost" style={{ padding: '4px' }}>
@@ -716,49 +757,83 @@ const AddSlotModal = ({ onClose, onSubmit }) => {
                 </div>
 
                 <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {/* Recurring vs single */}
+                    {/* Recurrence selector */}
                     <div>
                         <label className="label">Тип</label>
                         <div style={{ display: 'flex', gap: '6px' }}>
                             <button
                                 type="button"
-                                onClick={() => setRecurring(true)}
-                                className={recurring ? 'btn btn-primary' : 'btn btn-secondary'}
-                                style={{ flex: 1, padding: '8px 12px', fontSize: '0.85rem' }}
+                                onClick={() => setRecurrence('weekly')}
+                                className={recurrence === 'weekly' ? 'btn btn-primary' : 'btn btn-secondary'}
+                                style={segBtn(recurrence === 'weekly')}
                             >
                                 🔁 Каждую неделю
                             </button>
                             <button
                                 type="button"
-                                onClick={() => setRecurring(false)}
-                                className={!recurring ? 'btn btn-primary' : 'btn btn-secondary'}
-                                style={{ flex: 1, padding: '8px 12px', fontSize: '0.85rem' }}
+                                onClick={() => setRecurrence('biweekly')}
+                                className={recurrence === 'biweekly' ? 'btn btn-primary' : 'btn btn-secondary'}
+                                style={segBtn(recurrence === 'biweekly')}
+                            >
+                                🔁 Раз в 2 нед
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setRecurrence('once')}
+                                className={recurrence === 'once' ? 'btn btn-primary' : 'btn btn-secondary'}
+                                style={segBtn(recurrence === 'once')}
                             >
                                 📅 Разово
                             </button>
                         </div>
                     </div>
 
-                    {recurring ? (
-                        <div>
-                            <label className="label">День недели</label>
-                            <select value={day} onChange={(e) => setDay(e.target.value)}>
-                                <option value="пн">Понедельник</option>
-                                <option value="вт">Вторник</option>
-                                <option value="ср">Среда</option>
-                                <option value="чт">Четверг</option>
-                                <option value="пт">Пятница</option>
-                                <option value="сб">Суббота</option>
-                                <option value="вс">Воскресенье</option>
-                            </select>
-                        </div>
-                    ) : (
-                        <div>
-                            <label className="label">Дата</label>
-                            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                    {/* Mode-specific inputs */}
+                    {recurrence === 'weekly' && (
+                        <>
+                            <div>
+                                <label className="label">День недели</label>
+                                <select value={day} onChange={(e) => setDay(e.target.value)} style={{ width: '100%' }}>
+                                    <option value="пн">Понедельник</option>
+                                    <option value="вт">Вторник</option>
+                                    <option value="ср">Среда</option>
+                                    <option value="чт">Четверг</option>
+                                    <option value="пт">Пятница</option>
+                                    <option value="сб">Суббота</option>
+                                    <option value="вс">Воскресенье</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="label">Повторять до (необязательно)</label>
+                                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ width: '100%' }} />
+                                <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                                    Если оставить пустым — слот будет повторяться бессрочно.
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {recurrence === 'biweekly' && (
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <div style={{ flex: 1 }}>
+                                <label className="label">Дата начала</label>
+                                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: '100%' }} />
+                            </div>
+                            <div style={{ flex: 1 }}>
+                                <label className="label">Дата окончания</label>
+                                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ width: '100%' }} />
+                            </div>
                         </div>
                     )}
 
+                    {recurrence === 'once' && (
+                        <div>
+                            <label className="label">Дата</label>
+                            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: '100%' }} />
+                        </div>
+                    )}
+
+                    {/* Time */}
                     <div style={{ display: 'flex', gap: '12px' }}>
                         <div style={{ flex: 1 }}>
                             <label className="label">Начало</label>
@@ -769,6 +844,19 @@ const AddSlotModal = ({ onClose, onSubmit }) => {
                             <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
                         </div>
                     </div>
+
+                    {error && (
+                        <div style={{
+                            padding: '8px 12px',
+                            borderRadius: 'var(--radius)',
+                            backgroundColor: 'var(--color-danger-bg)',
+                            color: 'var(--color-danger)',
+                            border: '1px solid var(--color-danger-border)',
+                            fontSize: '0.82rem'
+                        }}>
+                            {error}
+                        </div>
+                    )}
 
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '4px' }}>
                         <button type="button" onClick={onClose} className="btn btn-secondary">Отмена</button>

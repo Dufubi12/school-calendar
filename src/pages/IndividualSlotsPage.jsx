@@ -32,21 +32,37 @@ const IndividualSlotsPage = () => {
 
     useEffect(() => {
         let cancelled = false;
-        Promise.all([
+        // Safety timeout — never let the page hang on «Загрузка…» forever.
+        // If any of the three fetches takes > 15 s, we surface whatever
+        // resolved so far (or empty defaults) and let the UI render.
+        const timeoutId = setTimeout(() => {
+            if (!cancelled) {
+                console.warn('[IZ] load timed out after 15s — rendering with current data');
+                setLoading(false);
+            }
+        }, 15000);
+
+        // Each loader is independent: a single failing call shouldn't block the others.
+        // Run them via allSettled so partial results still render.
+        Promise.allSettled([
             loadIndividualSlots(teachers),
             loadAvailability(),
             loadInvitations(),
-        ]).then(([slots, av, invs]) => {
+        ]).then((results) => {
             if (cancelled) return;
-            setSlotsByTeacher(slots || {});
-            setAvailability(av || {});
-            setAcceptedInvitations((invs || []).filter(i => i.status === 'accepted'));
+            const [slotsR, avR, invsR] = results;
+            if (slotsR.status === 'fulfilled') setSlotsByTeacher(slotsR.value || {});
+            else console.error('[IZ] loadIndividualSlots failed:', slotsR.reason);
+            if (avR.status === 'fulfilled') setAvailability(avR.value || {});
+            else console.error('[IZ] loadAvailability failed:', avR.reason);
+            if (invsR.status === 'fulfilled') setAcceptedInvitations((invsR.value || []).filter(i => i.status === 'accepted'));
+            else console.error('[IZ] loadInvitations failed:', invsR.reason);
             setLoading(false);
-        }).catch(err => {
-            console.error('Failed to load IZ slots', err);
-            if (!cancelled) setLoading(false);
         });
-        return () => { cancelled = true; };
+        return () => {
+            cancelled = true;
+            clearTimeout(timeoutId);
+        };
     }, [teachers]);
 
     // Resolve current user's last name to filter for teacher view
